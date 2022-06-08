@@ -1,4 +1,4 @@
-from matplotlib.transforms import Transform
+
 from base.base_cfg import BaseCfg
 from base.timer import Timer
 from numpy import nan
@@ -19,12 +19,26 @@ class OneHotArrayEncodingTransformer(BaseEstimator, TransformerMixin):
 
     def __init__(self, col: str, map: dict = None, sufix: str = '_b'):
         self.col = col
-        self.map = {x: y+sufix for (x, y) in map.items()}
         self.sufix = sufix
         self._errors = {}
+        self.map = {}
+        for (x, y) in map.items():
+            if isinstance(y, list):
+                for v in y:
+                    self.map[x] = v+sufix
+            elif isinstance(y, str):
+                self.map[x] = y+sufix
+            else:
+                raise ValueError(f'{y} is not a string or list')
 
     def target_cols(self):
-        return set(self.map.values())
+        retSet = set()
+        for v in self.map.values():
+            if isinstance(v, list):
+                retSet.update(v)
+            elif isinstance(v, str):
+                retSet.add(v)
+        return retSet
 
     def fit(self, X, y=None):
         """Fit the model according to the given training data.
@@ -66,24 +80,34 @@ class OneHotArrayEncodingTransformer(BaseEstimator, TransformerMixin):
         logger.debug(f'transform {self.col}')
         t = Timer(self.col, logger)
         t.start()
+        default_col_name = self.map.get('_', None)
         new_cols = self.target_cols()
         for col in new_cols:
-            X[col] = 0
+            if col not in X.columns:
+                X[col] = 0
         for i, row in X.iterrows():
             value = row[self.col]
             if (value is None) or (value is nan):
                 continue
-            try:
-                if isinstance(value, list):
-                    for v in value:
-                        X.loc[i, self.map[v]] = 1
+
+            def _set_value(value, index):
+                col_name = self.map.get(value, default_col_name)
+                if isinstance(col_name, list):
+                    for v in col_name:
+                        X.loc[i, v] = 1
+                elif isinstance(col_name, str):
+                    X.loc[i, col_name] = 1
                 else:
-                    X.loc[i, self.map[value]] = 1
-            except KeyError:
-                if self._errors[value]:
-                    self._errors[value] += 1
-                    continue
-                self._errors[value] = 1
-                logger.error(f'{self.col} {value} not in {self.map}')
+                    if self._errors.get(value, None) is not None:
+                        self._errors[value] += 1
+                        return
+                    self._errors[value] = 1
+                    logger.error(f'{self.col} {value} not in map')
+
+            if isinstance(value, list):
+                for v in value:
+                    _set_value(v, i)
+            else:
+                _set_value(value, i)
         t.stop()
         return X

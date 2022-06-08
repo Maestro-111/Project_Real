@@ -1,9 +1,14 @@
 
 import datetime
+from gc import garbage
 from itertools import chain
 
 import pandas as pd
 import re
+from math import isnan
+from pyrsistent import v
+
+from base.util import allTypeToFloat, allTypeToInt, stringToFloat
 
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -15,6 +20,8 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 from prop.estimate_scale import PropertyType, PropertyTypeRegexp
 from transformer.binary import BinaryTransformer
+from transformer.baths import BthsTransformer
+from transformer.bedrooms import RmsTransformer
 from transformer.one_hot_array import OneHotArrayEncodingTransformer
 from transformer.select_col import SelectColumnTransformer
 from transformer.db_label import DbLabelTransformer
@@ -22,8 +29,13 @@ from transformer.db_numeric import DbNumericTransformer
 from transformer.drop_row import DropRowTransformer
 from transformer.row_func import RowFuncTransformer
 from transformer.simple_column import SimpleColumnTransformer
+from transformer.label_map import getLevel, levelType, acType, \
+    bsmtType, featType, constrType, garageType, lockerType, \
+    heatType, fuelType, exposureType, laundryType, \
+    parkingDesignationType, parkingFacilityType, balconyType, \
+    ptpType
 
-logger = BaseCfg.getLogger('preprocessor')
+logger = BaseCfg.getLogger(__name__)
 
 
 def yearOfDateNumber(dateNumber, deltaDays=0):
@@ -79,18 +91,12 @@ def ptype2SingleValue(row, ptype2):
     return None
 
 
-def allTypeToInt(dummy, value):
-    v_type = type(value)
-    if v_type is int:
-        return value
-    if v_type is float:
-        return int(value)
-    if v_type is str:
-        int_array = re.findall(r'\d+', "hello 42a I'm a m32 string 30")
-        return int(''.join(int_array))
-    if v_type is list:
-        return allTypeToInt(None, value[0])
-    return None
+def allTypeToFloatRow(_, value):
+    return allTypeToFloat(value)
+
+
+def allTypeToIntRow(_, value):
+    return allTypeToInt(value)
 
 
 def shallDrop(row):
@@ -110,366 +116,36 @@ def shallDrop(row):
     return False
 
 
-Level = {
-    1.0: 1,
-    2.0: 2,
-    3.0: 3,
-    "2nd": 2,
-    "2nd ": 2,
-    "3rd": 3,
-    "4Rd": 4,
-    "4th": 4,
-    "5th": 5,
-    "Basement": -1,
-    "Bsmnt": -1,
-    "Bsmt": -1,
-    "Flat": 0,
-    "Ground": 0,
-    "In Betwn": 0.5,
-    "In-Betwn": 0.5,
-    "Loft": 1,
-    "Lower": -0.5,
-    "M": 0,
-    "Main": 0,
-    "Sub-Bsmt": -1,
-    "Upper": 0.5,
-    # extra from rms
-    "2Nd": 2,
-    "3Rd": 3,
-    "Above": 0.5,
-    "Fifth": 5,
-    "Fourth": 4,
-    "Laundry": 0,
-    "Other": 0,
-    "Second": 2,
-    "Sixth": 6,
-    "Sub-Bsmt": -1,
-    "Third": 3,
-    "U": 0,
-    "Unknown": 0,
-}
+def taxYearRow(row, value):
+    yr = allTypeToInt(value)
+    if yr is not None:
+        if 200 <= yr < 300:
+            yr = yr % 100 + 2000
+        if yr < 200:
+            yr = yr + 2000
+        if 1990 <= yr <= datetime.datetime.now().year:
+            return yr
+    return yearOfByField(row, 'onD', -183)
 
 
-def getLevel(label: str):
-    if label in Level:
-        return Level[label]
-    l = allTypeToInt(None, label)
-    if l is not None:
-        return l
-    return 0
+def laundryLevelRow(_, value):
+    return getLevel(value)
 
 
-roomType = [
-    "  ",
-    "1 Pc Bath",
-    "1pc Bathroom",
-    "1pc Ensuite bath",
-    "2 Bedroom",
-    "2 Pc Bath",
-    "2Br",
-    "2nd Bedro",
-    "2nd Br",
-    "2nd Br ",
-    "2pc Bathroom",
-    "2pc Ensuite bath",
-    "3 Bedroom",
-    "3 Pc Bath",
-    "3Br",
-    "3pc Bathroom",
-    "3pc Ensuite bath",
-    "3rd Bedro",
-    "3rd Br",
-    "4 Bedroom",
-    "4 Pc Bath",
-    "4Br",
-    "4pc Bathroom",
-    "4pc Ensuite bath",
-    "4th B/R",
-    "4th Bedro",
-    "4th Br",
-    "5 Pc Bath",
-    "5pc Bathroom",
-    "5pc Ensuite bath",
-    "5th Bedro",
-    "5th Br",
-    "6 Pc Bath",
-    "6pc Bathroom",
-    "6pc Ensuite bath",
-    "6th Br",
-    "7 Pc Bath",
-    "7th Br",
-    "Addition",
-    "Additional bedroom",
-    "Atrium",
-    "Attic",
-    "Attic (finished)",
-    "B Liv Rm",
-    "Balcony",
-    "Bar",
-    "Bath",
-    "Bath (# pieces 1-6)",
-    "Bathroom",
-    "Bed",
-    "Bedrom",
-    "Bedroom",
-    "Bedroom 2",
-    "Bedroom 3",
-    "Bedroom 4",
-    "Bedroom 5",
-    "Bedroom 6",
-    "Beverage",
-    "Bonus",
-    "Bonus Rm",
-    "Br",
-    "Breakfast",
-    "Breakfest",
-    "Closet",
-    "Cold",
-    "Cold Rm",
-    "Cold/Cant",
-    "Coldroom",
-    "Common Rm",
-    "Common Ro",
-    "Computer",
-    "Conservatory",
-    "Den",
-    "Din",
-    "Dinette",
-    "Dining",
-    "Dining Rm",
-    "Dining nook",
-    "Dinning",
-    "Eat in kitchen",
-    "Eating area",
-    "Enclosed porch",
-    "Ensuite",
-    "Ensuite (# pieces 2-6)",
-    "Entrance",
-    "Exer",
-    "Exercise",
-    "Fam",
-    "Fam Rm",
-    "Family",
-    "Family Rm",
-    "Family bathroom",
-    "Family/Fireplace",
-    "Flat",
-    "Flex Space",
-    "Florida",
-    "Florida/Fireplace",
-    "Foyer",
-    "Fruit",
-    "Fruit cellar",
-    "Full bathroom",
-    "Full ensuite bathroom",
-    "Furnace",
-    "Game",
-    "Games",
-    "Great",
-    "Great Rm",
-    "Great Roo",
-    "Guest suite",
-    "Gym",
-    "Hall",
-    "Hobby",
-    "Indoor Pool",
-    "Inlaw suite",
-    "Kit",
-    "Kitchen",
-    "Kitchen/Dining",
-    "L Porch",
-    "Laundry",
-    "Laundry / Bath",
-    "Library",
-    "Living",
-    "Living ",
-    "Living Rm",
-    "Living/Dining",
-    "Living/Fireplace",
-    "Lobby",
-    "Locker",
-    "Loft",
-    "Master",
-    "Master Bd",
-    "Master bedroom",
-    "Mbr",
-    "Media",
-    "Media/Ent",
-    "Mezzanine",
-    "Mud",
-    "Mudroom",
-    "Muskoka",
-    "Nook",
-    "Not known",
-    "Nursery",
-    "Office",
-    "Other",
-    "Pantry",
-    "Partial bathroom",
-    "Partial ensuite bathroom",
-    "Patio",
-    "Play",
-    "Play Rm",
-    "Playroom",
-    "Porch",
-    "Powder Rm",
-    "Powder Ro",
-    "Prim Bdrm",
-    "Primary",
-    "Primary B",
-    "Primary Bedroom",
-    "Rec",
-    "Rec Rm",
-    "Recreatio",
-    "Recreation",
-    "Recreational, Games",
-    "Rental unit",
-    "Roughed-In Bathroom",
-    "Sauna",
-    "Second Kitchen",
-    "Sitting",
-    "Solarium",
-    "Steam",
-    "Storage",
-    "Studio",
-    "Study",
-    "Sun",
-    "Sun Rm",
-    "Sunroom",
-    "Sunroom/Fireplace",
-    "Tandem",
-    "Tandem Rm",
-    "U Porch",
-    "Utility",
-    "Walk Up Attic",
-    "Wet Bar",
-    "Wine Cellar",
-    "Work",
-    "Workshop"
-]
+def petsRow(_, value):
+    value = str(value)[0]
+    if value == 'Y':
+        return 2
+    elif value == 'R':
+        return 1
+    elif value == 'N':
+        return 0
+    else:
+        return 2  # unknown
 
-bsmtType = {
-    "Apt": 'bsmtApt',
-    "Crw": 'bsmtCrw',
-    "Fin": 'bsmtFin',
-    "Full": 'bsmtFull',
-    "Half": 'bsmtHalf',
-    "NAN": 'bsmtNON',
-    "NON": 'bsmtNON',
-    "Prt": 'bsmtPrt',
-    "Sep": 'bsmtSep',
-    "Slab": 'bsmtSlab',
-    "W/O": 'bsmtWO',
-    "W/U": 'bsmtWU',
-    "Y": 'bsmtY',
-    "unFin": 'bsmtUnFin',
-}
 
-featType = {
-    "Arts Centre": 'featArtsCentre',
-    "Beach": 'featBeach',
-    "Bush": 'featBush',
-    "Campground": 'featCampground',
-    "Clear View": 'featClearView',
-    "Cul De Sac": 'featCulDeSac',
-    "Cul De Sac/Deadend": 'featCulDeSac',
-    "Cul Desac/Dead End": 'featCulDeSac',
-    "Cul-De-Sac": 'featCulDeSac',
-    "Dead End": 'featCulDeSac',
-    "Electric Car Charg": 'featElectricCarCharg',
-    "Electric Car Charger": 'featElectricCarCharg',
-    "Equestrian": 'featEquestrian',
-    "Fenced Yard": 'featFencedYard',
-    "Garden Shed": 'featGardenShed',
-    "Geenbelt/Conser.": 'featGeenbelt',
-    "Golf": 'featGolf',
-    "Greenbelt/Conse": 'featGreenbelt',
-    "Greenbelt/Conserv": 'featGreenbelt',
-    "Greenbelt/Conserv.": 'featGreenbelt',
-    "Greenblt/Conser": 'featGreenbelt',
-    "Grnbelt/Conserv": 'featGreenbelt',
-    "Grnbelt/Conserv.": 'featGreenbelt',
-    "Hospital": 'featHospital',
-    "Island": 'featIsland',
-    "Lake Access": 'featLakeAccess',
-    "Lake Backlot": 'featLakeBacklot',
-    "Lake Pond": 'featLakePond',
-    "Lake/Pond": 'featLakePond',
-    "Lake/Pond/River": 'featLakePond',
-    "Lakefront/River": 'featLakePond',
-    "Level": 'featLevel',
-    "Library": 'featLibrary',
-    "Major Highway": 'featMajorHighway',
-    "Marina": 'featMarina',
-    "Other": 'featOther',
-    "Park": 'featPark',
-    "Part Cleared": 'featPartCleared',
-    "Part Cleared ": 'featPartCleared',
-    "Place Of Workship": 'featPlaceOfWorkship',
-    "Place Of Workshop": 'featPlaceOfWorkship',
-    "Place Of Worship": 'featPlaceOfWorship',
-    "Public": 'featPublic',
-    "Public Transit": 'featPublicTransit',
-    "Ravine": 'featRavine',
-    "Rec Centre": 'featRecCentre',
-    "Rec Rm": 'featRecRm',
-    "Rec/Comm Centre": 'featRecCentre',
-    "Rec/Commun Centre": 'featRecCentre',
-    "Rec/Commun Ctr": 'featRecCentre',
-    "Rec/Commun.Ctr": 'featRecCentre',
-    "River/Stream": 'featRiverStream',
-    "Rolling": 'featRolling',
-    "School": 'featSchool',
-    "School Bus Route": 'featSchoolBusRoute',
-    "Security System": 'featSecuritySystem',
-    "Skiing": 'featSkiing',
-    "Sking": 'featSkiing',
-    "Sloping": 'featSloping',
-    "Slopping": 'featSloping',
-    "Stucco/Plaster": 'featStuccoPlaster',
-    "Terraced": 'featTerraced',
-    "Tiled": 'featTiled',
-    "Tiled/Drainage": 'featTiled',
-    "Treed": 'featTreed',
-    "Waterfront": 'featWaterfront',
-    "Wood": 'featWood',
-    "Wood/Treed": 'featWood',
-    "Wooded/Treed": 'featWood',
-}
-
-constrType = {
-    "A. Siding/Brick": 'ConstrBrick',
-    "Alum": 'ConstrAlum',
-    "Alum Siding": 'ConstrAlum',
-    "Alum Slding": 'ConstrAlum',
-    "Aluminium Siding": 'ConstrAlum',
-    "Aluminum": 'ConstrAlum',
-    "Aluminum Siding": 'ConstrAlum',
-    "Aluminum Sliding": 'ConstrAlum',
-    "Board/Batten": 'ConstrBoard',
-    "Brick": 'ConstrBrick',
-    "Brick Front": 'ConstrBrick',
-    "Concrete": 'ConstrConc',
-    "Insulbrick": 'ConstrInsul',
-    "Log": 'ConstrLog',
-    "Metal/Side": 'ConstrMetal',
-    "Metal/Sliding": 'ConstrMetal',
-    "Metal/Steel": 'ConstrMetal',
-    "Other": 'ConstrOther',
-    "Shingle": 'ConstrShing',
-    "Stocco (Plaster)": 'ConstrStucco',
-    "Stone": 'ConstrStone',
-    "Stone(Plaster)": 'ConstrStone',
-    "Stucco (Plaster)": 'ConstrStucco',
-    "Stucco Plaster": 'ConstrStucco',
-    "Stucco(Plaster)": 'ConstrStucco',
-    "Stucco/Plaster": 'ConstrStucco',
-    "Vinyl": 'ConstrVinyl',
-    "Vinyl Siding": 'ConstrVinyl',
-    "Vinyl Slding": 'ConstrVinyl',
-    "Vinyl Sliding": 'ConstrVinyl',
-    "Wood": 'ConstrWood',
-}
+def balconyRow(_, value):
+    return balconyType.get(value, 0)
 
 
 class Preprocessor(TransformerMixin, BaseEstimator):
@@ -495,10 +171,12 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         'prkg_inc':     ['N', 'Y'],
         'hydro_inc':    ['N', 'Y'],
         'water_inc':    ['N', 'Y'],
+        'insur_bldg':   ['N', 'Y'],
         'tv':           ['N', 'Y'],
         'all_inc':      ['N', 'Y'],
         'furnished':    ['N', 'Y'],
         'retirement':   ['N', 'Y'],
+        'pvt_ent':      ['N', 'Y'],
     }
     cols_label: dict = {  # na DROP means to remove the rows without label
         'lst':      {'na': UNKNOWN},
@@ -508,24 +186,26 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         'cmty':     {'na': UNKNOWN},
         'st':       {'na': UNKNOWN},
         'zip':      {'na': UNKNOWN},
-        'ptype':    {'na': 'r'},
+        'rltr':     {'na': UNKNOWN},
         #        'saletp':   {'na': DROP},
         'ptype2_l': {'na': DROP},
-        'pstyl':    {'na': UNKNOWN},
-        'ptp':      {'na': UNKNOWN},
+        'pstyl':    {'na': UNKNOWN},  # 131 types
+        'ptp':      {'na': UNKNOWN},  # ptpType
         'zone':     {'na': UNKNOWN},
-        'gatp':     {'na': NONE},
-        'heat':     {'na': 'Forced Air'},
-        'fuel':     {'na': UNKNOWN},
-        'balcony':  {'na': NONE},
-        'laundry':  {'na': NONE},
-        'laundry_lev': {'na': NONE},
-        'fce':      {'na': 'U'},
-        'lkr':      {'na': NONE},
-        'rltr':     {'na': UNKNOWN},
-        'pets':     {'na': UNKNOWN},
-        'park_desig': {'na': UNKNOWN},
-        'park_fac':  {'na': UNKNOWN},
+    }
+    cols_array_label: dict = {
+        'constr':   constrType,
+        'feat':     featType,
+        'bsmt':     bsmtType,
+        'ac':       acType,
+        'gatp':     garageType,
+        'lkr':      lockerType,
+        'heat':     heatType,
+        'fuel':     fuelType,
+        'fce':      exposureType,
+        'laundry':  laundryType,
+        'park_desig': parkingDesignationType,
+        'park_fac':  parkingFacilityType,
     }
     cols_numeric: dict = {
         'lat':      {'na': DROP},
@@ -543,6 +223,8 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         'lp':       {'na': 0},
         'lpr':      {'na': 0},
         'sp':       {'na': 0},
+        'depth':    {'na': 0},
+        'flt':      {'na': 0},
     }
     cols_special: dict = {
         'lp':       {'na': DROP},
@@ -556,24 +238,21 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         'bltYr':    {'to': 'built_yr_n'},
         'rmBltYr':  {'to': 'built_yr_n'},  # rmBltYr or bltYr estimator
         'ptype2':   {'to': 'ptype2_l'},  # ptype2
-    }
-    cols_array_label: dict = {
-        'constr':   constrType,
-        'feat':     featType,
-        'bsmt':     bsmtType,
+        'ac':       {'to': 'ac_n'},  # ac
+        'laundry_lev': {'na': NONE},
+        'pets':     {'na': UNKNOWN},
     }
 
-    cols_condo: list[str] = [
-        'unt'  # get unit and level or penhouse. C5628585
-    ]
+    cols_todo: dict = {
+        'ptype':    {'na': 'r'},
+    }
+
     cols_structured: list[str] = [
-        'rms',  # get primary bedroom dimensions, sum of all bedrooms deminsions
-        'bths',  # get bath numbers on each level
-
-        'la',  # la id : la.agnt[].id
-        'la2',  # la2 id: la2.agnt[].id
-        'schools',  # get 3 school names and ratings, rankings
+        'rms',  # get primary bedroom dimensions and area, sum of all bedrooms deminsions, sum of all bedrooms area
+        'bths',  # get bath numbers on each level => l0-l3 * number of bathrooms; l0-l3 * pices total
     ]
+
+    # -------------------------------------------------------------------------
     cols_forsale_in_models: dict = {
         'tax':      {'na': MEAN},
         # the first half year counted as previous tax year
@@ -585,6 +264,14 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         # MEAN of all flt when Detached/Semi-Detached/Freehold Townhouse
         'flt':      {'na': MEAN},
     }
+    cols_not_used: list[str] = [  # TODO
+        'la',  # la id : la.agnt[].id
+        'la2',  # la2 id: la2.agnt[].id
+        'schools',  # get 3 school names and ratings, rankings
+    ]
+    cols_condo: list[str] = [  # TODO
+        'unt'  # unit storey, total storey, percentage of total storey
+    ]
 
     def __init__(self, mode: Mode = Mode.PREDICT, collection_prefix: str = 'ml_'):
         self.mode: Mode = mode
@@ -606,16 +293,45 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         all_cols = [*all_cols]
 
         colTransformerParams = [
-            ('built_year', SelectColumnTransformer(
-                col='built_yr_n', columns=['bltYr', 'rmBltYr'], v_type=int, as_na_value=None)),
-            ('sqft', SelectColumnTransformer(
-                col='sqft_n', columns=['sqft', 'rmSqft'], v_type=int, as_na_value=None)),
-            ('st_num', allTypeToInt, 'st_num', 'st_num_n'),
             ('saletp_b', binarySaletpByRow, 'saletp', 'saletp_b'),
-            ('ptype2_label', ptype2SingleValue, 'ptype2', 'ptype2_l'),
+            ('ptype2_l', ptype2SingleValue, 'ptype2', 'ptype2_l'),
         ]
         all_cols.append('saletp_b')
         all_cols.append('ptype2_l')
+        # custom transformers
+        if 'pets' in all_cols:
+            colTransformerParams.append(('pets', petsRow, 'pets', 'pets_n'))
+        if 'laundry_lev' in all_cols:
+            colTransformerParams.append(
+                ('laundry_lev', laundryLevelRow, 'laundry_lev', 'laundry_lev_n'))
+        if 'balcony' in all_cols:
+            colTransformerParams.append(
+                ('balcony', balconyRow, 'balcony', 'balcony_n'))
+        if 'flt' in all_cols:
+            colTransformerParams.append(
+                ('flt', allTypeToFloatRow, 'flt', 'flt_n'))
+        if 'depth' in all_cols:
+            colTransformerParams.append(
+                ('depth', allTypeToFloatRow, 'depth', 'depth_n'))
+        if 'tax' in all_cols:
+            colTransformerParams.append(
+                ('tax', allTypeToFloatRow, 'tax', 'tax_n'))
+            colTransformerParams.append(
+                ('taxyr', taxYearRow, 'taxyr', 'taxyr_n'))
+        if 'bltYr' in all_cols:
+            colTransformerParams.append(('built_year', SelectColumnTransformer(
+                new_col='built_yr_n', columns=['bltYr', 'rmBltYr'], func=stringToFloat, as_na_value=None)))
+        if 'sqft' in all_cols:
+            colTransformerParams.append(('sqft', SelectColumnTransformer(
+                new_col='sqft_n', columns=['sqft', 'rmSqft'], func=stringToFloat, as_na_value=None)))
+        if 'st_num' in all_cols:
+            colTransformerParams.append(
+                ('st_num', allTypeToIntRow, 'st_num', 'st_num_n'))
+        # rms and bths
+        if 'rms' in all_cols:
+            colTransformerParams.append(('rms', RmsTransformer()))
+        if 'bths' in all_cols:
+            colTransformerParams.append(('bths', BthsTransformer()))
         # array labels
         for k, v in self.cols_array_label.items():
             if k in all_cols:
@@ -636,9 +352,9 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                         self.label_collection,
                         col=k,
                         mode=self.mode,
-                        na_value=v['na'],), k, f'{k}_n'))
+                        na_value=v['na'],), k, f'{k}_c'))
                 all_cols.append(f'{k}_n')
-        # numeric columns
+        # numerical columns
         for k, v in self.cols_numeric.items():
             if k in all_cols:
                 colTransformerParams.append(

@@ -1,5 +1,6 @@
 import pandas as pd
 from base.base_cfg import BaseCfg
+from math import isnan
 from sklearn.base import BaseEstimator, TransformerMixin
 
 logger = BaseCfg.getLogger(__name__)
@@ -18,10 +19,10 @@ class SelectColumnTransformer(TransformerMixin, BaseEstimator):
     ----------
     """
 
-    def __init__(self, col: str, columns: list[str], v_type=int, as_na_value=None):
-        self.col = col
+    def __init__(self, new_col: str, columns: list[str], func: (any), as_na_value=None):
+        self.new_col = new_col
         self.columns = columns
-        self.v_type = v_type
+        self.func = func
         self.as_na_value = as_na_value
 
     def fit(self, X, y=None):
@@ -57,11 +58,18 @@ class SelectColumnTransformer(TransformerMixin, BaseEstimator):
             The transformed data.
         """
         logger.debug(f'transform {self.columns}')
+        self.count_found = dict(zip(self.columns, [0]*len(self.columns)))
+        self.count_found['not_found'] = 0
 
         def select_col(row):
             for col in self.columns:
-                if type(row[col]) == self.v_type:
-                    return row[col]
+                v = self.func(row[col])
+                if v is not None and not isnan(v):
+                    self.count_found[col] += 1
+                    #logger.debug(f'{col}:{row[col]}=> {v}')
+                    return v
+            self.count_found['not_found'] += 1
             return self.as_na_value
-        X.loc[:, self.col] = X.apply(select_col, axis=1)
+        X.loc[:, self.new_col] = X.apply(select_col, axis=1)
+        logger.debug(f'found {self.count_found}')
         return X

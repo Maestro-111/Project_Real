@@ -46,10 +46,12 @@ class Organizer:
         'den_fr', 'ens_lndry', 'fce', 'lkr',
         'sqft', 'rmSqft', 'bltYr', 'rmBltYr',
         'cac_inc', 'comel_inc', 'heat_inc', 'prkg_inc',
-        'hydro_inc', 'water_inc', 'all_inc',
+        'hydro_inc', 'water_inc', 'all_inc', 'pvt_ent',
         'insur_bldg', 'prkg_inc', 'tv',
         'daddr', 'commuId', 'park_fac',
         'comm', 'rltr', 'la', 'la2',
+        'pets', 'laundry', 'laundry_lev',
+        # TODO: unit exposure, house exposure? fce exposure?
     ]
 
     def __init__(self):

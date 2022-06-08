@@ -15,7 +15,7 @@ class RowFuncTransformer(BaseEstimator, TransformerMixin):
                  func,
                  col: str,
                  inverse_func=None,
-                 new_col: str = None):
+                 new_col: list[str] or str = None):
         self.func = func
         self.inverse_func = inverse_func
         self.col = col
@@ -34,6 +34,6 @@ class RowFuncTransformer(BaseEstimator, TransformerMixin):
         X1 = X.apply(
             lambda row: self.func(row, row[self.col]), axis=1)
         # logger.debug(X1)
-        X.loc[:, target_col] = X1
+        X.loc[:, target_col] = pd.DataFrame(list(X1))
         return X
         # return pd.DataFrame({self.col: X.values})

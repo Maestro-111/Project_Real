@@ -1,6 +1,8 @@
+import re
 from .base_cfg import BaseCfg
 import pandas as pd
 import numpy as np
+from math import isnan
 from datetime import datetime, timezone
 UTC_OFFSET_TIMEDELTA = datetime.utcnow() - datetime.now()
 
@@ -33,3 +35,50 @@ def index_min(values):
 def print_all_columns(df):
     pd.set_option('display.max_columns', None)
     print(df.columns.values, df.columns.values.shape)
+
+
+def allTypeToFloat(value):
+    v_type = type(value)
+    if v_type is int:
+        return float(value)
+    if v_type is float:
+        if isnan(value):
+            return None
+        return value
+    if v_type is str:
+        int_array = re.findall(r'\d+(?:\.\d+)?', value)
+        value = ''.join(int_array)
+        if len(value) > 0:
+            return float(value)
+    if v_type is list:
+        return allTypeToFloat(value[0])
+    return None
+
+
+def allTypeToInt(value):
+    v_type = type(value)
+    if v_type is int:
+        return value
+    if v_type is float:
+        if isnan(value):
+            return None
+        return int(value)
+    if v_type is str:
+        int_array = re.findall(r'\d+(?:\.\d+)?', value)
+        value = ''.join(int_array)
+        if len(value) > 0:
+            return int(float(value))
+    if v_type is list:
+        return allTypeToInt(value[0])
+    return None
+
+
+reAllNumber = re.compile(r'^\s*\d+(?:\.\d+)?\s*$')
+
+
+def stringToFloat(value):
+    if isinstance(value, str) and reAllNumber.match(value):
+        return float(value)
+    if (isinstance(value, float) or isinstance(value, int)) and not isnan(value):
+        return float(value)
+    return None

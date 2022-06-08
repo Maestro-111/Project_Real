@@ -38,6 +38,7 @@ def read_data_by_query(query: dict, col_list: list[str], mongodb: MongoDB = None
     start_time = time.time()
     result = mongodb.load_data('properties', col_list, query)
     if BaseCfg.isDebug():
+        print('columns:', result.columns, 'shape:', result.shape)
         print_dateframe(result)
     end_time = time.time()
     print('data shape:', str(result.shape),

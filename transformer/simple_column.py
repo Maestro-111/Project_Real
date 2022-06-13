@@ -1,5 +1,6 @@
 
 from base.base_cfg import BaseCfg
+from base.timer import Timer
 from sklearn.base import BaseEstimator, TransformerMixin
 import pandas as pd
 
@@ -49,6 +50,7 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
         for name, func, col, targetCol in self.transFunctions:
             if BaseCfg.debug:
                 logger.debug(f'transform {name}:{col}=>{targetCol}')
+            timer = Timer(name, logger)
             if getattr(func, 'transform', None) is not None:
                 if col:
                     X.loc[:, targetCol] = func.transform(X[col])
@@ -67,4 +69,5 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
                 else:
                     X = X.apply(lambda x: func(x), axis=1)
                 pass
+            timer.stop(X.shape[0])
         return X

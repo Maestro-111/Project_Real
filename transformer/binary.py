@@ -1,4 +1,5 @@
 
+import copy
 import pandas as pd
 from base.base_cfg import BaseCfg
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -24,6 +25,24 @@ class BinaryTransformer(TransformerMixin, BaseEstimator):
     def __init__(self, map, col: str):
         self.map = map
         self.col = col
+        if not isinstance(self.map, list) or len(self.map) != 2:
+            raise ValueError(
+                f'The map must be a list of two values, got {self.map}')
+
+    def get_params(self, deep=True):
+        params = {
+            'col': self.col,
+            'map': copy.deepcopy(self.map)
+        }
+        return params
+
+    def set_params(self, map: dict, col: str):
+        self.map = map if map is not None else self.map
+        self.col = col if col is not None else self.col
+        if not isinstance(self.map, list) or len(self.map) != 2:
+            raise ValueError(
+                f'The map must be a list of two values, got {self.map}')
+        return self
 
     def fit(self, X, y=None):
         """Fit the model according to the given training data.
@@ -60,11 +79,8 @@ class BinaryTransformer(TransformerMixin, BaseEstimator):
         """
         logger.debug(f'binary.transform {self.col}')
         if isinstance(self.map, list):
-            if len(self.map) == 2:
-                X = [0 if x == self.map[0] else 1 for x in X]
-            else:
-                X = [0 if x is None else 1 for x in X]
+            X = [1 if x == self.map[1] else 0 for x in X]
         else:
-            X = [0 if x is None else self.map(x) for x in X]
-        # return X
-        return pd.DataFrame({self.col: X})
+            raise ValueError(
+                f'The map must be a list of two values, got {self.map}')
+        return X

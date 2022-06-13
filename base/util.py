@@ -82,3 +82,11 @@ def stringToFloat(value):
     if (isinstance(value, float) or isinstance(value, int)) and not isnan(value):
         return float(value)
     return None
+
+
+def stringToInt(value):
+    if isinstance(value, str) and reAllNumber.match(value):
+        return int(value)
+    if (isinstance(value, float) or isinstance(value, int)) and not isnan(value):
+        return int(value)
+    return None

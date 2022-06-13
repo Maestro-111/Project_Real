@@ -4,6 +4,7 @@ from enum import Enum
 import re
 
 from regex import F
+from sympy import Q
 
 
 class PropertyType:
@@ -35,13 +36,14 @@ class EstimateScale:
             prov: str = 'ON',
             area: str = None,
             city: str = None,
-            cmty: str = None):
+            sale: bool = None,
+    ):
         self.datePoint = datePoint
         self.propType = propType
         self.prov = prov
         self.area = area
         self.city = city
-        self.cmty = cmty
+        self.sale = sale
 
     def __str__(self):
         keys = [self.datePoint.strftime('%Y-%m-%d')]
@@ -57,9 +59,15 @@ class EstimateScale:
             keys.append('C')
         else:
             keys.append('O')
-        for key in ['prov', 'area', 'city', 'cmty']:
+        for key in ['prov', 'area', 'city']:
             if self.__dict__[key]:
                 keys.append(self.__dict__[key])
+        if self.sale:
+            keys.append('S')
+        elif self.sale is False:
+            keys.append('R')
+        else:
+            keys.append('-')
         return '.'.join(keys)
 
     def get_type_query(self):
@@ -84,6 +92,12 @@ class EstimateScale:
             query['area'] = self.area
         if self.city:
             query['city'] = self.city
-        if self.cmty:
-            query['cmty'] = self.cmty
+        return query
+
+    def get_saletp_query(self):
+        query = {}
+        if self.sale is True:
+            query['saletp'] = 'Sale'
+        elif self.sale is False:
+            query['saletp'] = 'Rent'
         return query

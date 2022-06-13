@@ -3,7 +3,7 @@
 from base.base_cfg import BaseCfg
 from base.mongo import getMongoClient
 from base.timer import Timer
-from prop.const import Mode
+from base.const import Mode
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.base import BaseEstimator, TransformerMixin
 import numpy as np
@@ -121,7 +121,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
                 self._save_mapping(col, label, cur_index, count)
                 self.labels_index_next_[col] += 1
             # print(self.labels_)
-            t.stop()
+            t.stop(X.shape[0])
 
         # Return the transformer
         return self
@@ -173,6 +173,6 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
                 self._save_mapping(col, label, index, 0)
             return index
         X = X.apply(
-            lambda row: map_value(row, mapping, self, self.col))
+            lambda val: map_value(val, mapping, self, self.col))
         # return X
-        return pd.DataFrame({self.col: X.values})
+        return X

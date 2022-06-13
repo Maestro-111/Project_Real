@@ -8,14 +8,14 @@ import re
 from math import isnan
 from pyrsistent import v
 
-from base.util import allTypeToFloat, allTypeToInt, stringToFloat
+from base.util import allTypeToFloat, allTypeToInt, stringToInt
 
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import FunctionTransformer
 from base.base_cfg import BaseCfg
-from prop.const import NONE, RENT_PRICE_UPPER_LIMIT, SALE_PRICE_LOWER_LIMIT, UNKNOWN, DROP, MEAN, Mode
+from base.const import NONE, RENT_PRICE_UPPER_LIMIT, SALE_PRICE_LOWER_LIMIT, UNKNOWN, DROP, MEAN, Mode
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 from prop.estimate_scale import PropertyType, PropertyTypeRegexp
@@ -34,6 +34,7 @@ from transformer.label_map import getLevel, levelType, acType, \
     heatType, fuelType, exposureType, laundryType, \
     parkingDesignationType, parkingFacilityType, balconyType, \
     ptpType
+from transformer.simple_column_concurrent import SimpleColumnConcurrentTransformer
 
 logger = BaseCfg.getLogger(__name__)
 
@@ -148,8 +149,20 @@ def balconyRow(_, value):
     return balconyType.get(value, 0)
 
 
+SUFFIXES = {
+    '_n': 'Number',
+    '_c': 'Category Number',
+    '_b': 'Binary 0/1',
+    '_l': 'String Label',
+}
+
+
 class Preprocessor(TransformerMixin, BaseEstimator):
     """ Transforms raw training and prediction data
+    To build root transformer, use TRAIN mode and fit with full dataset(columns and rows). 
+    To transform predict data, use PREDICT mode and fit with training/predict data.
+    If columns changed, use PREDICT mode and fit with training data. It can transform both training and predict data.
+    Different column sets need different preprocessors.
 
     Transforming steps:
     -. drop na columns if in training mode, return error if in prediction mode.
@@ -319,11 +332,11 @@ class Preprocessor(TransformerMixin, BaseEstimator):
             colTransformerParams.append(
                 ('taxyr', taxYearRow, 'taxyr', 'taxyr_n'))
         if 'bltYr' in all_cols:
-            colTransformerParams.append(('built_year', SelectColumnTransformer(
-                new_col='built_yr_n', columns=['bltYr', 'rmBltYr'], func=stringToFloat, as_na_value=None)))
+            colTransformerParams.append(('bltYr', SelectColumnTransformer(
+                new_col='bltYr_n', columns=['bltYr', 'rmBltYr'], func=stringToInt, as_na_value=None)))
         if 'sqft' in all_cols:
             colTransformerParams.append(('sqft', SelectColumnTransformer(
-                new_col='sqft_n', columns=['sqft', 'rmSqft'], func=stringToFloat, as_na_value=None)))
+                new_col='sqft_n', columns=['sqft', 'rmSqft'], func=stringToInt, as_na_value=None)))
         if 'st_num' in all_cols:
             colTransformerParams.append(
                 ('st_num', allTypeToIntRow, 'st_num', 'st_num_n'))
@@ -348,17 +361,17 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         for k, v in self.cols_label.items():
             if k in all_cols:
                 colTransformerParams.append(
-                    (f'{k}_label', DbLabelTransformer(
+                    (f'{k}_c', DbLabelTransformer(
                         self.label_collection,
                         col=k,
                         mode=self.mode,
                         na_value=v['na'],), k, f'{k}_c'))
-                all_cols.append(f'{k}_n')
+                all_cols.append(f'{k}_c')
         # numerical columns
         for k, v in self.cols_numeric.items():
             if k in all_cols:
                 colTransformerParams.append(
-                    (f'{k}_number', DbNumericTransformer(
+                    (f'{k}_n', DbNumericTransformer(
                         self.number_collection,
                         col=k,
                         mode=self.mode,
@@ -379,7 +392,9 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         )
 
         # create the pipeline
-        self.customTransformer = SimpleColumnTransformer(
+        # self.customTransformer = SimpleColumnTransformer(
+        #     colTransformerParams)
+        self.customTransformer = SimpleColumnConcurrentTransformer(
             colTransformerParams)
 
     def fit(self, Xdf: pd.DataFrame, y=None):

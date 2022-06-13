@@ -34,6 +34,9 @@ class MongoDB():
         logger.debug('close db')
         self.conn.close()
 
+    def getDb(self):
+        return self.db
+
     def collection(self, collname):
         return self.db[collname]
 
@@ -71,7 +74,6 @@ class MongoDB():
     def load_data(self, collection, col_list, filter={}):
         """ Read from Mongo and Store into DataFrame with filter and col_list. Used by pred package."""
         projection = {col: 1 for col in col_list}
-        projection.update({'_id': 0})
         cursor = self.collection(collection).find(filter, projection)
         df = pd.DataFrame(list(cursor)).infer_objects()
         return df

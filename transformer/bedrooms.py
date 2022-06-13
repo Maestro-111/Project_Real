@@ -1,4 +1,5 @@
 
+from math import isnan
 import re
 import pandas as pd
 from base.base_cfg import BaseCfg
@@ -62,22 +63,30 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
         logger.debug(f'transform rms')
         timer = Timer('rms', logger)
         timer.start()
+        nanCount = 0
+        totalCount = 0
         for col in self.target_cols():
             X[col] = 0
         for index, rms in X.loc[:, 'rms'].items():
+            totalCount += 1
             if not isinstance(rms, list):
+                if isnan(rms):
+                    nanCount += 1
+                    continue
                 logger.warning(f'rms is not list: {rms}')
                 continue
             totalSize = 0
             totalArea = 0
             for rm in rms:
                 if not isinstance(rm, dict):
+                    if isnan(rm):
+                        continue
                     logger.warning(f'rm is not dict: {rm} {type(rm)}')
                     continue
                 t = rm.get('t', None)
                 if t is not None:
-                    w = rm.get('w', 0)
-                    h = rm.get('h', 0)
+                    w = rm.get('w', 0) or 0
+                    h = rm.get('h', 0) or 0
                     if self.masterReg.match(t):
                         X.loc[index, 'rm_p_size_n'] = w + h
                         X.loc[index, 'rm_p_area_n'] = w * h
@@ -88,5 +97,7 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
                         totalArea += w * h
             X.loc[index, 'rm_t_size_n'] = totalSize
             X.loc[index, 'rm_t_area_n'] = totalArea
-        timer.stop()
+        if nanCount > 0:
+            logger.warning(f'{nanCount}/{totalCount} nan values in rms')
+        timer.stop(totalCount)
         return X

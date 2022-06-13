@@ -1,4 +1,5 @@
 
+from math import isnan
 from base.base_cfg import BaseCfg
 from base.timer import Timer
 from numpy import nan
@@ -35,9 +36,10 @@ class OneHotArrayEncodingTransformer(BaseEstimator, TransformerMixin):
         retSet = set()
         for v in self.map.values():
             if isinstance(v, list):
-                retSet.update(v)
+                for vv in v:
+                    retSet.add(self.col+vv)
             elif isinstance(v, str):
-                retSet.add(v)
+                retSet.add(self.col+v)
         return retSet
 
     def fit(self, X, y=None):
@@ -94,9 +96,11 @@ class OneHotArrayEncodingTransformer(BaseEstimator, TransformerMixin):
                 col_name = self.map.get(value, default_col_name)
                 if isinstance(col_name, list):
                     for v in col_name:
-                        X.loc[i, v] = 1
+                        X.loc[i, (self.col+v)] = 1
                 elif isinstance(col_name, str):
-                    X.loc[i, col_name] = 1
+                    X.loc[i, (self.col+col_name)] = 1
+                elif value is None or isnan(value):
+                    pass
                 else:
                     if self._errors.get(value, None) is not None:
                         self._errors[value] += 1

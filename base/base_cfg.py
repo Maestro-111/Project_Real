@@ -1,5 +1,6 @@
 
 # TODO: consistent file naming in camelCase or snake_case naming
+from datetime import datetime
 from lib2to3.pytree import Base
 import os
 import importlib.util
@@ -40,6 +41,10 @@ class BaseCfg():
         else:
             logger.setLevel(logging.INFO)
         return logger
+
+    @staticmethod
+    def getTs():
+        return datetime.now()
 
     def getConfig(self):
         """ get the configuration module """

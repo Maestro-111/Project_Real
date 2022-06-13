@@ -1,4 +1,5 @@
 
+from math import isnan
 import re
 import pandas as pd
 from base.base_cfg import BaseCfg
@@ -60,17 +61,25 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
         X_transformed : {array-like, sparse matrix}, shape (n_samples, n_features_)
             The transformed data.
         """
-        logger.debug(f'transform rms')
+        logger.debug(f'transform baths')
         timer = Timer('bths', logger)
         timer.start()
+        nanCount = 0
+        totalCount = 0
         for col in self.target_cols():
             X[col] = 0
         for index, bths in X.loc[:, 'bths'].items():
+            totalCount += 1
             if not isinstance(bths, list):
+                if isnan(bths):
+                    nanCount += 1
+                    continue
                 logger.warning(f'bths is not list: {bths}')
                 continue
             for bth in bths:
                 if not isinstance(bth, dict):
+                    if isnan(bth):
+                        continue
                     logger.warning(f'bth is not dict: {bth} {type(bth)}')
                     continue
                 level = max(
@@ -78,5 +87,7 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
                 t = bth.get('t', 0)
                 X.loc[index, f'bth_t{level}_n'] += t
                 X.loc[index, f'bth_pc{level}_n'] += t * bth.get('p', 0)
+        if nanCount > 0:
+            logger.warning(f'{nanCount}/{totalCount} nan values in bths')
         timer.stop()
         return X

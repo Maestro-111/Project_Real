@@ -63,6 +63,8 @@ class SelectColumnTransformer(TransformerMixin, BaseEstimator):
 
         def select_col(row):
             for col in self.columns:
+                if col not in row:
+                    continue
                 v = self.func(row[col])
                 if v is not None and not isnan(v):
                     self.count_found[col] += 1

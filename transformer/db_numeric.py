@@ -7,7 +7,7 @@ import pandas as pd
 from base.base_cfg import BaseCfg
 from base.mongo import getMongoClient
 from base.timer import Timer
-from prop.const import DROP, Mode
+from base.const import DROP, Mode
 from prop.estimate_scale import EstimateScale
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -111,7 +111,7 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
                 "kurtosis": float(describe.kurtosis),
             }
             self._save_values(self.stats)
-            t.stop()
+            t.stop(X.shape[0])
         self.stats_ = self.stats
         # Return the transformer
         return self
@@ -153,5 +153,5 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         else:
             na_value = self.stats_["mean"]
         X.fillna(na_value, inplace=True)
-        # return X
-        return pd.DataFrame({self.col: X.values})
+        return X
+        # return pd.DataFrame({self.col: X.values})

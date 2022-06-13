@@ -3,7 +3,7 @@
 import pandas as pd
 from base.base_cfg import BaseCfg
 import numpy as np
-from prop.const import Mode
+from base.const import Mode
 from sklearn.base import BaseEstimator, TransformerMixin
 
 

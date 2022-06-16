@@ -89,5 +89,5 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
                 X.loc[index, f'bth_pc{level}_n'] += t * bth.get('p', 0)
         if nanCount > 0:
             logger.warning(f'{nanCount}/{totalCount} nan values in bths')
-        timer.stop()
+        timer.stop(X.shape[0])
         return X

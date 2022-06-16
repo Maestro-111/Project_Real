@@ -3,15 +3,13 @@
 from base.base_cfg import BaseCfg
 from base.mongo import getMongoClient
 from base.timer import Timer
-from base.const import Mode
+from base.const import SAVE_LABEL_TO_DB, Mode
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.base import BaseEstimator, TransformerMixin
 import numpy as np
 import pandas as pd
 
 logger = BaseCfg.getLogger(__name__)
-
-NO_SAVE_DEFAULT = True
 
 
 class DbLabelTransformer(TransformerMixin, BaseEstimator):
@@ -41,18 +39,21 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         The next label index to use.
     """
 
-    def __init__(self,
-                 collection,
-                 col: str,
-                 mode: Mode = Mode.TRAIN,
-                 na_value=None,
-                 no_save=NO_SAVE_DEFAULT,
-                 ):
+    def __init__(
+        self,
+        collection,
+        col: str,
+        mode: Mode = Mode.TRAIN,
+        na_value=None,
+        save_to_db: bool = SAVE_LABEL_TO_DB,
+    ):
+        if collection is None:
+            return
         self.collection = collection
         self.col = col
         self.mode = mode
         self.na_value = na_value
-        self.no_save = no_save
+        self.save_to_db = save_to_db
         # create index on col
         MongoDB = getMongoClient()
         MongoDB.createIndex(self.collection, fields=[
@@ -69,7 +70,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
                     self.labels_index_next_[self.col] = doc['i']
 
     def _save_mapping(self, col: str, label: str, index: int, count: int):
-        if self.no_save:
+        if not self.save_to_db:
             return
         getMongoClient().save(self.collection, {
             "_id": f"{col}:{label}",
@@ -109,6 +110,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
             col_labels = X.value_counts()
             col_labels.index = col_labels.index.astype(str)
             col_labels = col_labels.sort_index()
+            totalLabels = 0
             for label, count in col_labels.items():
                 if label is None:
                     if self.na_value is not None:
@@ -120,7 +122,10 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
                 self.labels_index_[col][cur_index] = label
                 self._save_mapping(col, label, cur_index, count)
                 self.labels_index_next_[col] += 1
+                totalLabels += 1
             # print(self.labels_)
+            logger.info(
+                f'{self.col} fit {self.mode} labels:{totalLabels}')
             t.stop(X.shape[0])
 
         # Return the transformer

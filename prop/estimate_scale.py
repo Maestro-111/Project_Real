@@ -101,3 +101,10 @@ class EstimateScale:
         elif self.sale is False:
             query['saletp'] = 'Rent'
         return query
+
+    def get_query(self):
+        query = {'ptype': 'r'}
+        query.update(self.get_type_query())
+        query.update(self.get_geo_query())
+        query.update(self.get_saletp_query())
+        return query

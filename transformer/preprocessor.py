@@ -34,7 +34,7 @@ from transformer.label_map import getLevel, levelType, acType, \
     heatType, fuelType, exposureType, laundryType, \
     parkingDesignationType, parkingFacilityType, balconyType, \
     ptpType
-from transformer.simple_column_concurrent import SimpleColumnConcurrentTransformer
+from transformer.simple_column import SimpleColumnTransformer
 
 logger = BaseCfg.getLogger(__name__)
 
@@ -207,18 +207,18 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         'zone':     {'na': UNKNOWN},
     }
     cols_array_label: dict = {
-        'constr':   constrType,
-        'feat':     featType,
-        'bsmt':     bsmtType,
-        'ac':       acType,
-        'gatp':     garageType,
-        'lkr':      lockerType,
-        'heat':     heatType,
-        'fuel':     fuelType,
-        'fce':      exposureType,
-        'laundry':  laundryType,
-        'park_desig': parkingDesignationType,
-        'park_fac':  parkingFacilityType,
+        'constr':   {'map': constrType, 'strType': False},
+        'feat':     {'map': featType, 'strType': False},
+        'bsmt':     {'map': bsmtType, 'strType': False},
+        'fuel':     {'map': fuelType, 'strType': False},
+        'laundry':  {'map': laundryType, 'strType': False},
+        'park_desig': {'map': parkingDesignationType, 'strType': False},
+        'ac':       {'map': acType, 'strType': True},
+        'gatp':     {'map': garageType, 'strType': True},
+        'lkr':      {'map': lockerType, 'strType': True},
+        'heat':     {'map': heatType, 'strType': True},
+        'fce':      {'map': exposureType, 'strType': True},
+        'park_fac':  {'map': parkingFacilityType, 'strType': True},
     }
     cols_numeric: dict = {
         'lat':      {'na': DROP},
@@ -348,7 +348,18 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         # array labels
         for k, v in self.cols_array_label.items():
             if k in all_cols:
-                transformer = OneHotArrayEncodingTransformer(k, v, '_b')
+                if v['strType']:
+                    transformer = OneHotArrayEncodingTransformer(
+                        col=k,
+                        map=v['map'],
+                        sufix='_b',
+                        collection=self.label_collection,
+                        mode=self.mode,
+                        na_value=None,
+                    )
+                else:
+                    transformer = OneHotArrayEncodingTransformer(
+                        k, v['map'], '_b')
                 colTransformerParams.append((f'{k}_x', transformer))
                 all_cols.extend(transformer.target_cols())
         # binary columns
@@ -392,9 +403,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         )
 
         # create the pipeline
-        # self.customTransformer = SimpleColumnTransformer(
-        #     colTransformerParams)
-        self.customTransformer = SimpleColumnConcurrentTransformer(
+        self.customTransformer = SimpleColumnTransformer(
             colTransformerParams)
 
     def fit(self, Xdf: pd.DataFrame, y=None):

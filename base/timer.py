@@ -37,7 +37,8 @@ class Timer:
         self._start_time = None
         if self.logger:
             self.logger.info(
-                f"{self.name} took {elapsed_time:0.4f} seconds {speed}/sec")
+                f"{self.name} took {elapsed_time:0.4f} seconds {speed}/sec {count or 'N/A'} count")
         else:
-            print(f"{self.name} Elapsed time: {elapsed_time:0.4f} s {speed}/sec")
+            print(
+                f"{self.name} Elapsed time: {elapsed_time:0.4f} s {speed}/sec {count or 'N/A'} count")
         return elapsed_time

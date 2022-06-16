@@ -48,7 +48,7 @@ class Organizer:
         self.predictors = []
         self.default_scale = EstimateScale(
             datePoint=datetime.datetime(2022, 2, 1, 0, 0),
-            propType=PropertyType.CONDO,
+            propType=PropertyType.DETACHED,
             prov='ON',
             area='Toronto',
             city='Toronto',
@@ -76,7 +76,12 @@ class Organizer:
     def init_transformers(self):
         """Initialize the internal structures for transform and hold data in memory."""
         self.__update_status('init transformers', 'run')
-        self.data_source = DataSource()
+        query = {
+            # '_id': {'$in': ['TRBW474049', 'TRBW4874697']},
+            'onD': {'$gt': 20080101},
+        }
+        query = {**query, **self.default_scale.get_query()}
+        self.data_source = DataSource(query=query)
         self.root_preprocessor = Preprocessor(Mode.TRAIN)
         self.data_source.load_data(self.root_preprocessor)
         self.__update_status('init transformers', 'done')
@@ -98,7 +103,8 @@ class Organizer:
             model_store=self.model_store,
             scale=self.default_scale,
         ))
-        self.predictors[0].train()
+        score = self.predictors[0].train()
+        logger.info('BuiltYear score: %.4f' % score)
         self.__update_status('__train predictors', 'done')
 
     def train(self):

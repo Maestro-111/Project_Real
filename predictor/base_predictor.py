@@ -14,6 +14,8 @@ from sklearn.metrics import explained_variance_score, accuracy_score, r2_score
 
 from base.store_file import FileStore
 
+logger = BaseCfg.getLogger(__name__)
+
 
 class ModelClass(Enum):
     Regression = 'Regression'
@@ -44,6 +46,7 @@ class BasePredictor(BaseEstimator):
         y_numeric_column: str = None,
         source_filter_func: (pd.Series) = None,
         source_date_span: int = None,
+        source_suffix_list: list[str] = None,
         model_store=None,
         model_class: ModelClass = ModelClass.Regression,
     ) -> None:
@@ -62,6 +65,7 @@ class BasePredictor(BaseEstimator):
         self.col_list.append(self.y_column)
         self.source_filter_func = source_filter_func
         self.source_date_span = source_date_span
+        self.source_suffix_list = source_suffix_list
         if model_store is None:
             self.store = FileStore()
         else:
@@ -122,6 +126,7 @@ class BasePredictor(BaseEstimator):
         self,
         date_span: int = None,
         filter_func: (pd.Series) = None,
+        suffix_list: list[str] = None,
     ) -> pd.DataFrame:
         """Load the data"""
         if self.data_source is None:
@@ -131,7 +136,9 @@ class BasePredictor(BaseEstimator):
             cols=self.col_list,
             date_span=date_span or self.source_date_span,
             filter_func=filter_func or self.source_filter_func,
+            suffix_list=suffix_list or self.source_suffix_list,
         )
+        logger.info(f'Data loaded. {self.source_suffix_list}')
         self.generate_numeric_columns()
         return self.data
 
@@ -151,8 +158,14 @@ class BasePredictor(BaseEstimator):
         """Return the number of columns"""
         self.x_numeric_columns_ = []
         for col in self.data.columns:
-            if self.data[col].dtype == 'float64' or self.data[col].dtype == 'int64':
-                self.x_numeric_columns_.append(col)
+            try:
+                if (col != self.y_numeric_column) and \
+                    (self.data[col].dtype == 'float64' or
+                     self.data[col].dtype == 'int64'):
+                    self.x_numeric_columns_.append(col)
+            except Exception as e:
+                logger.error(
+                    f'Error in generating numeric column:{col} error:{e}')
         return self.x_numeric_columns_
 
     def train(self):

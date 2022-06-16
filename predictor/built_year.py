@@ -40,6 +40,8 @@ class BuiltYear(BasePredictor):
             name='BuiltYear',
             data_source=data_source,
             source_filter_func=needBuiltYear,
+            source_date_span=365*18,
+            source_suffix_list=['_n', '_c', '_b'],
             scale=scale,
             model_store=model_store,
             y_numeric_column='bltYr_n',
@@ -48,7 +50,10 @@ class BuiltYear(BasePredictor):
                 'lat', 'lng',
                 'zip',  'gatp',
                 'st', 'st_num',
-                'bthrms',
+                'bthrms', 'pstyl',
+                'ptp', 'pstyl', 'constr', 'feat',
+                'bsmt',  'heat', 'park_fac',
+                'depth', 'flt', 'rms', 'bths',
             ],
         )
         # self.col_list = [
@@ -68,7 +73,7 @@ class BuiltYear(BasePredictor):
         super().prepare_model()
         if self.model is None:
             self.model_params = copy.copy(BuiltYear.base_model_params)
-            self.model = lgb.LGBMRegressor(**self.base_model_params)
+            self.model = lgb.LGBMRegressor(**self.model_params)
             logger.info('BuiltYear: model_params: {}'.format(
                 self.model_params))
 
@@ -78,6 +83,7 @@ class BuiltYear(BasePredictor):
             print_dateframe(X_train)
         self.prepare_model()
         # single training
+        logger.debug(f'BuiltYear: X_train: {X_train.shape}')
         self.model.fit(X_train, y_train)
         # cross validation with k-fold
         cv = RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)

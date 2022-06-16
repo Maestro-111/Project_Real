@@ -68,7 +68,7 @@ class DataSource:
     all_data_query = {
         # test: '_id': {'$in': ['TRBE5467506', 'TRBC5467511']},
         # only use data after 2021 for test purpose
-        'onD': {'$gt': 20210101},
+        'onD': {'$gt': 20200101},
         'ptype': 'r',
         'prov': 'ON',
         'area': {
@@ -187,13 +187,14 @@ class DataSource:
             for suffix in suffix_list:
                 if col + suffix in existing_cols:
                     columns.append(col + suffix)
-                    found = True
-            # try one hot encoding
-            for c in existing_cols:
-                if c.startswith(col) and c.endswith('_b'):
-                    columns.append(c)
-                    found = True
-            if need_raw or not found:
+                    # found = True
+            if '_b' in suffix_list:
+                # try one hot encoding
+                for c in existing_cols:
+                    if c.startswith(col) and c.endswith('_b'):
+                        columns.append(c)
+                        # found = True
+            if need_raw:
                 columns.append(col)
         rd = rd.loc[:, columns]
         # return dataframe or copy

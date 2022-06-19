@@ -8,11 +8,11 @@ from base.timer import Timer
 from prop.data_source import DataSource
 from prop.estimate_scale import EstimateScale
 from sklearn.base import BaseEstimator
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, RepeatedKFold, cross_val_score
 from base.util import print_dateframe
 from sklearn.metrics import explained_variance_score, accuracy_score, r2_score
-
 from base.store_file import FileStore
+from numpy import mean, std
 
 logger = BaseCfg.getLogger(__name__)
 
@@ -72,8 +72,8 @@ class BasePredictor(BaseEstimator):
             self.store = model_store
 
         self.pred_accuracy_score = None
-        self.data: pd.DataFrame = None
-        self.data_train = None
+        self.df: pd.DataFrame = None
+        self.df_prepared = None
         self.trained_seconds = 0
         self.predict_per_second = 0
         self.logger = BaseCfg.getLogger(self.name)
@@ -119,8 +119,8 @@ class BasePredictor(BaseEstimator):
         """Set the scale"""
         self.scale = scale
         # need to reload the data
-        self.data = None
-        self.data_train = None
+        self.df = None
+        self.df_prepared = None
 
     def load_data(
         self,
@@ -131,7 +131,7 @@ class BasePredictor(BaseEstimator):
         """Load the data"""
         if self.data_source is None:
             raise ValueError('Data source is not specified.')
-        self.data = self.data_source.get_df(
+        self.df = self.data_source.get_df(
             scale=self.scale,
             cols=self.col_list,
             date_span=date_span or self.source_date_span,
@@ -140,12 +140,13 @@ class BasePredictor(BaseEstimator):
         )
         logger.info(f'Data loaded. {self.source_suffix_list}')
         self.generate_numeric_columns()
-        return self.data
+        return self.df
 
     def prepare_data(self, X, params=None):
         """Prepare the data for training or prediction. 
         To be implemented by subclasses.
         """
+        self.generate_numeric_columns()
         return X
 
     def prepare_model(self):
@@ -157,11 +158,11 @@ class BasePredictor(BaseEstimator):
     def generate_numeric_columns(self):
         """Return the number of columns"""
         self.x_numeric_columns_ = []
-        for col in self.data.columns:
+        for col in self.df.columns:
             try:
                 if (col != self.y_numeric_column) and \
-                    (self.data[col].dtype == 'float64' or
-                     self.data[col].dtype == 'int64'):
+                    (self.df[col].dtype == 'float64' or
+                     self.df[col].dtype == 'int64'):
                     self.x_numeric_columns_.append(col)
             except Exception as e:
                 logger.error(
@@ -170,36 +171,49 @@ class BasePredictor(BaseEstimator):
 
     def train(self):
         """Train the model"""
-        if self.data_train is None:
-            if self.data is None:
+        if self.df_prepared is None:
+            if self.df is None:
                 self.load_data()
-            self.data_train = self.prepare_data(self.data)
-        df_train, df_test = train_test_split(
-            self.data_train, test_size=0.15, random_state=10)
-        # X = self.data_train[self.x_columns].values
-        # y = self.data_train[self.y_column].values
+            self.df_prepared = self.prepare_data(self.df)
+        self.df_train, self.df_test = train_test_split(
+            self.df_prepared, test_size=0.15, random_state=10)
+        # X = self.df_prepared[self.x_columns].values
+        # y = self.df_prepared[self.y_column].values
         # X_train, X_test, y_train, y_test = train_test_split(
         #     X, y, random_state=0)
         timer = Timer(self.name, self.logger)
-        self._train(df_train[self.x_numeric_columns_],
-                    df_train[self.y_numeric_column])
+        self.prepare_model()
+        self.fit(self.df_train[self.x_numeric_columns_],
+                 self.df_train[self.y_numeric_column])
         self.pred_accuracy_score = self.test(
             X=None,
-            X_test=df_test[self.x_numeric_columns_],
-            y=df_test[self.y_numeric_column])
-        self.trained_seconds = timer.stop(df_train.shape[0])
+            X_test=self.df_test[self.x_numeric_columns_],
+            y=self.df_test[self.y_numeric_column])
+        self.trained_seconds = timer.stop(self.df_train.shape[0])
         # print(f'{self.name} accuracy: {self.pred_accuracy_score}')
         return self.pred_accuracy_score
-
-    def _train(self, X, y, **kwargs):
-        """Train the model."""
-        self.prepare_model()
-        self.fit(X, y, **kwargs)
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         """Fit the model"""
         self.model.fit(X, y)
         pass
+
+    def cross_val(self, X=None, y=None):
+        if X is None or y is None:
+            X = self.df_train[self.x_numeric_columns_]
+            y = self.df_train[self.y_numeric_column]
+        # cross validation with k-fold
+        cv = RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)
+        n_scores = cross_val_score(
+            self.model,
+            X,
+            y,
+            scoring='neg_mean_absolute_error',
+            cv=cv,
+            n_jobs=-1,
+            error_score='raise'
+        )
+        logger.info('MAE: %.3f (%.3f)' % (mean(n_scores), std(n_scores)))
 
     def test(self, X, y, X_test=None):
         """Calculate the accuracy of the model."""
@@ -211,12 +225,13 @@ class BasePredictor(BaseEstimator):
 
     def get_score(self, y_true, y_pred):
         """Get the accuracy score."""
-        if self.model_class == ModelClass.Regression:
+        if self.model_class is None or self.model_class == ModelClass.Regression:
             pred_accuracy_score = r2_score(y_true, y_pred)
         elif self.model_class == ModelClass.Classification:
             pred_accuracy_score = accuracy_score(y_true, y_pred)
         else:
-            raise ValueError('Model class is not specified.')
+            raise ValueError(
+                f'Model class is not specified. {self.model_class}')
         return pred_accuracy_score
 
     def tune(self, date_spans: list[int] = None):
@@ -227,7 +242,7 @@ class BasePredictor(BaseEstimator):
         best_date_span = 0
         best_accuracy_score = 0
         for date_span in date_spans:
-            self.data_train = None
+            self.df_prepared = None
             self.load_data(date_span)
             # TODO use different model_params
             self.train()

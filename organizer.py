@@ -17,15 +17,21 @@ import datetime
 import socket
 import sys
 from pandas import DataFrame
+from base.timer import Timer
+import numpy as np
+import pandas as pd
+import psutil
 from base.base_cfg import BaseCfg
-from base.const import Mode
+from base.const import CONCURRENT_PROCESSES_MAX, Mode
 from base.mongo import MongoDB
 from base.store_gridfs import GridfsStore
 from base.sysDataHelpers import setSysdataTs
 from predictor.built_year import BuiltYear
+from predictor.sqft import Sqft
 from prop.data_source import DataSource
 from prop.estimate_scale import EstimateScale, PropertyType
 from transformer.preprocessor import Preprocessor
+import concurrent.futures
 logger = BaseCfg.getLogger(__name__)
 
 
@@ -40,7 +46,7 @@ class Organizer:
         self.prep_data: DataFrame = None
         self.data_source: DataSource = None
         self.model_store = GridfsStore(
-            self.mongodb.getDb(),
+            # self.mongodb.getDb(),
             collection='ml_fs',
             prefix='ml_',
         )
@@ -54,6 +60,7 @@ class Organizer:
             city='Toronto',
             sale=True,
         )
+        self.num_procs = CONCURRENT_PROCESSES_MAX
         self.__update_status('program', 'run')
 
     def __update_status(self, job, status):
@@ -78,7 +85,7 @@ class Organizer:
         self.__update_status('init transformers', 'run')
         query = {
             # '_id': {'$in': ['TRBW474049', 'TRBW4874697']},
-            'onD': {'$gt': 20080101},
+            'onD': {'$gt': 20200101},
         }
         query = {**query, **self.default_scale.get_query()}
         self.data_source = DataSource(query=query)
@@ -96,16 +103,44 @@ class Organizer:
 
     def __train_predictors(self):
         """Create predictors and train them."""
-        self.__update_status('__train predictors', 'run')
+        #self.__update_status('__train predictors', 'run')
         self.predictors.clear()
         self.predictors.append(BuiltYear(
             data_source=self.data_source,
             model_store=self.model_store,
             scale=self.default_scale,
         ))
-        score = self.predictors[0].train()
-        logger.info('BuiltYear score: %.4f' % score)
-        self.__update_status('__train predictors', 'done')
+        self.predictors.append(Sqft(
+            data_source=self.data_source,
+            model_store=self.model_store,
+            scale=self.default_scale,
+        ))
+
+        # for predictor in self.predictors:
+        #     score = predictor.train()
+        #     logger.info(f'{predictor.name} score: {score:.4f}')
+
+        num_procs = min((psutil.cpu_count(logical=False) - 1),
+                        CONCURRENT_PROCESSES_MAX,
+                        self.num_procs,
+                        len(self.predictors))
+        logger.info(f'num_procs: {num_procs}')
+        timer = Timer(f'predictors', logger)
+        pred_results = []
+        splitted_predictors = np.array_split(self.predictors, num_procs)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_procs) as executor:
+            results = [
+                executor.submit(_predictor_train, predictors)
+                for predictors in splitted_predictors
+            ]
+            for result in concurrent.futures.as_completed(results):
+                try:
+                    pred_results.append(result.result())
+                except Exception as ex:
+                    logger.error(str(ex))
+                    raise ex
+        logger.info(pred_results)
+        #self.__update_status('__train predictors', 'done')
 
     def train(self):
         """Train all the models."""
@@ -133,3 +168,12 @@ class Organizer:
         #    1. when has new labels, raise warning for retraining
         # 2. clean/transform data* based on particular estimator
         # 3. make estimation
+
+
+def _predictor_train(predictors):
+    train_result = []
+    for predictor in predictors:
+        score = predictor.train()
+        # TODO: save models
+        train_result.append(f'{predictor.name} : {score}')
+    return train_result

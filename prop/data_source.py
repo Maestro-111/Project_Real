@@ -107,19 +107,19 @@ class DataSource:
         """
         self.query = query if query else DataSource.all_data_query
         self.col_list = col_list if col_list else DataSource.all_data_col_list
-        self.raw_data = None
-        self.transformed_data = None
+        self.df_raw = None
+        self.df_transformed = None
 
     def __str__(self):
         return 'DataSource: {}'.format(self.query)
 
     def load_data(self, preprocessor: Preprocessor = None):
-        self.raw_data = read_data_by_query(
+        self.df_raw = read_data_by_query(
             self.query, self.col_list)
         if preprocessor is not None:
-            self.transformed_data = preprocessor.fit_transform(self.raw_data)
+            self.df_transformed = preprocessor.fit_transform(self.df_raw)
             # groupby and reindex by EstimateScale
-            self.grouped_data = self.transformed_data.set_index([
+            self.df_grouped = self.df_transformed.set_index([
                 'saletp_b', 'ptype2_l',
                 'prov', 'area', 'city',
                 '_id',
@@ -128,8 +128,8 @@ class DataSource:
                 ascending=[True, True, True, True, True],
                 inplace=False,
             )
-            return self.grouped_data
-        return self.raw_data
+            return self.df_grouped
+        return self.df_raw
 
     def get_df(
         self,
@@ -167,7 +167,7 @@ class DataSource:
             slices.append(slice(scale.city, scale.city))
         slices.append(slice(None))
         print(slices)
-        rd = self.grouped_data.loc[tuple(slices), :]
+        rd = self.df_grouped.loc[tuple(slices), :]
         # onD:
         rd = rd.loc[rd.onD.between(
             dateToInt(scale.datePoint - timedelta(days=date_span)),
@@ -187,15 +187,17 @@ class DataSource:
             for suffix in suffix_list:
                 if col + suffix in existing_cols:
                     columns.append(col + suffix)
-                    # found = True
-            if '_b' in suffix_list:
-                # try one hot encoding
-                for c in existing_cols:
-                    if c.startswith(col) and c.endswith('_b'):
-                        columns.append(c)
-                        # found = True
-            if need_raw:
+                    found = True
+            if not found:
+                if '_b' in suffix_list:
+                    # try one hot encoding
+                    for c in existing_cols:
+                        if c.startswith(col) and c.endswith('_b'):
+                            columns.append(c)
+                            found = True
+            if need_raw or not found:
                 columns.append(col)
+        columns = list(dict.fromkeys(columns))  # remove duplicates
         rd = rd.loc[:, columns]
         # return dataframe or copy
         return rd.copy() if copy else rd

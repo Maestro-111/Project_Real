@@ -53,6 +53,20 @@ def yearOf(field, deltaDays=0):
     return lambda row: yearOfByField(row, field, deltaDays)
 
 
+DATE_20000101 = datetime.datetime(2000, 1, 1, 0, 0)
+
+
+def daysFrom2K(_, dayNum):
+    if isnan(dayNum):
+        return None
+    dayNum = int(dayNum)
+    day = dayNum % 100
+    year = dayNum // 10000
+    month = (dayNum // 100) - (year * 100)
+    date = datetime.datetime(year, month, day, 0, 0)
+    return abs((date - DATE_20000101).days)
+
+
 def saletpSingleValue(row, saletp):
     if isinstance(saletp, str):
         return saletp
@@ -238,6 +252,8 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         'sp':       {'na': 0},
         'depth':    {'na': 0},
         'flt':      {'na': 0},
+        # 'onD':      {'na': DROP},
+        # 'offD':     {'na': 0},
     }
     cols_special: dict = {
         'lp':       {'na': DROP},
@@ -312,6 +328,12 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         all_cols.append('saletp_b')
         all_cols.append('ptype2_l')
         # custom transformers
+        if 'onD' in all_cols:
+            colTransformerParams.append(('onD', daysFrom2K, 'onD', 'onD_n'))
+        if 'offD' in all_cols:
+            colTransformerParams.append(('offD', daysFrom2K, 'offD', 'offD_n'))
+        if 'sldd' in all_cols:
+            colTransformerParams.append(('sldd', daysFrom2K, 'sldd', 'sldd_n'))
         if 'pets' in all_cols:
             colTransformerParams.append(('pets', petsRow, 'pets', 'pets_n'))
         if 'laundry_lev' in all_cols:
@@ -331,10 +353,10 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                 ('tax', allTypeToFloatRow, 'tax', 'tax_n'))
             colTransformerParams.append(
                 ('taxyr', taxYearRow, 'taxyr', 'taxyr_n'))
-        if 'bltYr' in all_cols:
+        if ('bltYr' in all_cols) or ('rmBltYr' in all_cols):
             colTransformerParams.append(('bltYr', SelectColumnTransformer(
                 new_col='bltYr_n', columns=['bltYr', 'rmBltYr'], func=stringToInt, as_na_value=None)))
-        if 'sqft' in all_cols:
+        if ('sqft' in all_cols) or ('rmSqft' in all_cols):
             colTransformerParams.append(('sqft', SelectColumnTransformer(
                 new_col='sqft_n', columns=['sqft', 'rmSqft'], func=stringToInt, as_na_value=None)))
         if 'st_num' in all_cols:

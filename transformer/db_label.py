@@ -94,20 +94,27 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         self : object
             Returns self.
         """
-        logger.debug(f'label {self.col} fit {self.mode}')
+        logger.debug(
+            f'label {self.col} fit {self.mode}')
         # X = check_array(X, accept_sparse=True)
 
         # self.n_features_ = X.shape[1]
 
-        if self.mode == Mode.TRAIN:
+        if self.mode is Mode.TRAIN:
             t = Timer(self.col, logger)
-            t.start()
             col = self.col  # TODO: deal with multiple columns
-            getMongoClient().deleteMany(self.collection, {'col': col})
+            if self.save_to_db:
+                getMongoClient().deleteMany(self.collection, {'col': col})
+            #logger.debug(f'set self.labels_ {self.col}')
             self.labels_ = {col: {}}
             self.labels_index_ = {col: {}}
             self.labels_index_next_ = {col: 0}
-            col_labels = X.value_counts()
+            try:
+                col_labels = X.value_counts()
+            except TypeError as e:
+                logger.fatal(X)
+                logger.fatal(e)
+                raise e
             col_labels.index = col_labels.index.astype(str)
             col_labels = col_labels.sort_index()
             totalLabels = 0

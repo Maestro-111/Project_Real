@@ -4,7 +4,9 @@ from math import isnan
 
 
 import pandas as pd
+from predictor.LGBMRegressor import LGBMRegressorPredictor
 from predictor.base_predictor import BasePredictor
+from predictor.writeback_mixin import WriteBackMixin
 from prop.data_source import DataSource
 
 from base.base_cfg import BaseCfg
@@ -19,16 +21,59 @@ logger = BaseCfg.getLogger(__name__)
 
 
 def needBuiltYear(row):
-    return not (row['bltYr_n'] is None or isnan(row['bltYr_n']))
+    return not (row['bltYr-n'] is None or isnan(row['bltYr-n']))
 
 
-class BuiltYear(BasePredictor):
+class BuiltYearEstimator(LGBMRegressorPredictor, WriteBackMixin):
     """Built Year Estimator class"""
-    base_model_params = {
-        'n_estimators': 300,
-        'max_depth': -1,
-        'num_leaves': 100,
-    }
+
+    def __init__(
+        self,
+        data_source: DataSource,
+        scale: EstimateScale = None,
+        model_store=None,
+    ):
+        super().__init__(
+            name='BuiltYearEstimator',
+            data_source=data_source,
+            source_filter_func=needBuiltYear,
+            source_date_span=365*18,
+            source_suffix_list=['-n', '-c', '-b'],
+            scale=scale,
+            model_store=model_store,
+            y_numeric_column='bltYr-n',
+            y_column='bltYr',
+            x_columns=[
+                'lat', 'lng',
+                'gatp', 'zip',
+                'st_num-st-n',
+                'bthrms', 'pstyl', 'ptp',
+                'bsmt',  'heat', 'park_fac',
+                'rms', 'bths',
+                'st', 'st_num',
+            ],
+        )
+        # self.col_list = [
+        #     'lat', 'lng', 'rmBltYr',
+        #     'cs16', 'st_num', 'st', 'zip', 'sid',
+        #     'gatp', 'flt', 'depth', 'gr', 'tgr', 'pstyl', 'bthrms',
+        # ]
+        # self.y_column = 'rmBltYr'
+        # self.x_columns = [
+        #     'lat', 'lng',
+        #     'zip',  'gatp', 'bthrms',
+        #     'st', 'st_num', 'st_num-st',
+        # ]
+        # self.categorical_feature = ['st', 'zip', 'gatp']
+
+    def writeback(self):
+        return super().writeback(
+            new_col='bltYr-e',
+            orig_col='bltYr-n')
+
+
+class BuiltYear(LGBMRegressorPredictor):
+    """Built Year Estimator class"""
 
     def __init__(
         self,
@@ -41,10 +86,10 @@ class BuiltYear(BasePredictor):
             data_source=data_source,
             source_filter_func=needBuiltYear,
             source_date_span=365*18,
-            source_suffix_list=['_n', '_c', '_b'],
+            source_suffix_list=['-n', '-c', '-b'],
             scale=scale,
             model_store=model_store,
-            y_numeric_column='bltYr_n',
+            y_numeric_column='bltYr-n',
             y_column='bltYr',
             x_columns=[
                 'lat', 'lng',
@@ -54,6 +99,7 @@ class BuiltYear(BasePredictor):
                 'ptp', 'pstyl', 'constr', 'feat',
                 'bsmt',  'heat', 'park_fac',
                 'depth', 'flt', 'rms', 'bths',
+                'st_num-st-n',
             ],
         )
         # self.col_list = [
@@ -65,61 +111,6 @@ class BuiltYear(BasePredictor):
         # self.x_columns = [
         #     'lat', 'lng',
         #     'zip',  'gatp', 'bthrms',
-        #     'st', 'st_num', 'st_num_st',
+        #     'st', 'st_num', 'st_num-st',
         # ]
         # self.categorical_feature = ['st', 'zip', 'gatp']
-
-    def prepare_model(self):
-        super().prepare_model()
-        if self.model is None:
-            self.model_params = copy.copy(BuiltYear.base_model_params)
-            self.model = lgb.LGBMRegressor(**self.model_params)
-            logger.info('BuiltYear: model_params: {}'.format(
-                self.model_params))
-
-    def prepare_data(self, X, params=None):
-        """Prepare data for training"""
-        X = X.copy()
-        # poly = PolynomialFeatures(2)
-        # poly.fit_transform(X_train)
-        X['st_c'].fillna(0, inplace=True)
-        X['st_num_st_n'] = (X['st_c'].astype(int) + 1) * 100000 + X['st_num_n']
-        X.dropna(inplace=True)
-        self.generate_numeric_columns()
-        return X
-
-
-def testBuiltYearByType(propType: PropertyType, city: str = 'Toronto'):
-    scale = EstimateScale(
-        datePoint=datetime.datetime(2022, 2, 1, 0, 0),
-        propType=propType,
-        prov='ON',
-        city=city,
-    )
-    builtYearEstimator = BuiltYear()
-    builtYearEstimator.set_scale(scale)
-    builtYearEstimator.set_query(query={'rmBltYr': {'$ne': None}})
-    # best_span, best_score = builtYearEstimator.tune()
-    # print('**********************')
-    # print(f'best: {best_score} => {best_span} days',
-    #       scale.propType, scale.city)
-    # print('**********************')
-    builtYearEstimator.load_data(
-        date_span=2922, query=builtYearEstimator.db_query)
-    score = builtYearEstimator.train()
-    print('**********************')
-    print(f'{scale.city}:{propType} => {score}')
-    print('**********************')
-
-
-def testBuiltYear():
-    # for propType in [PropertyType.CONDO, PropertyType.TOWNHOUSE, PropertyType.SEMI_DETACHED, PropertyType.DETACHED]:
-    #     for city in ['Toronto', 'Mississauga', 'Brampton', 'Markham', 'Oakville']:
-    for propType in [PropertyType.DETACHED]:
-        for city in ['Toronto', 'Mississauga', 'Brampton', 'Markham', 'Oakville']:
-            testBuiltYearByType(propType, city)
-        print('----------------------------------------------------------------')
-
-
-if __name__ == '__main__':
-    testBuiltYear()

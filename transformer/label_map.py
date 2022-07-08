@@ -316,7 +316,7 @@ constrType = {
 }
 
 acType = {
-    '_': 'acNON',
+    '-': 'acNON',
     1.0: 'acY',
     4.0: 'acY',
     "?": 'acNON',
@@ -383,7 +383,7 @@ def getLevel(label):
 
 
 garageType = {
-    '_': 'GrNone',
+    '-': 'GrNone',
     "None": 'GrNone',
     "Attached": 'GrAttached',
     "Boulevard": 'GrBoulevard',
@@ -413,7 +413,7 @@ garageType = {
 }
 
 lockerType = {
-    '_': 'lkrNone',
+    '-': 'lkrNone',
     'Common': 'lkrCommon',
     'Ensuite': 'lkrEnsuite',
     'Ensuite&Exclusive': 'lkrEnsuite',
@@ -427,7 +427,7 @@ lockerType = {
 }
 
 exposureType = {
-    '_': 'fceUnknown',
+    '-': 'fceUnknown',
     'E': 'fceE',
     'N': 'fceN',
     'S': 'fceS',

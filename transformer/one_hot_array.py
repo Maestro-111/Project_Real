@@ -25,7 +25,7 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
         self,
         col: str,
         map: dict = None,
-        sufix: str = '_b',
+        sufix: str = '-b',
         collection: str = None,
         mode: Mode = Mode.TRAIN,
         na_value=None,
@@ -33,7 +33,7 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
     ):
         if collection is not None:
             super().__init__(collection, col, mode, na_value, save_to_db)
-            self.col_category = self.col+'_c'
+            self.col_category = self.col+'-c'
             # logger.info(
             #     f'init OneHotArrayEncodingTransformer with collection {self.col_category}')
         else:
@@ -60,9 +60,9 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
         for v in self.map.values():
             if isinstance(v, list):
                 for vv in v:
-                    retSet.add(self.col+vv)
+                    retSet.add(self.col+'-'+vv)
             elif isinstance(v, str):
-                retSet.add(self.col+v)
+                retSet.add(self.col+'-'+v)
         return retSet
 
     def fit(self, X, y=None):
@@ -92,6 +92,9 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
             logger.debug(f'fit {self.col} save label to db')
             Xs = X[self.col].apply(lambda x: self.map.get(x, x))
             super().fit(Xs, y)
+            # print('self getattr labels-', getattr(self, 'labels-', 'None'))
+            # print(f'self.col {self.col} in self.labels-',
+            #       (self.col not in self.labels_))
 
         self.n_col_ = len(self.target_cols())
         return self
@@ -114,7 +117,7 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
         list_value_count = 0
         str_value_count = 0
         error_count = 0
-        default_col_name = self.map.get('_', None)
+        default_col_name = self.map.get('-', None)
         new_cols = self.target_cols()
         for col in new_cols:
             if col not in X.columns:
@@ -125,9 +128,9 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
             col_name = self.map.get(value, default_col_name)
             if isinstance(col_name, list):
                 for v in col_name:
-                    X.loc[i, (self.col+v)] = 1
+                    X.loc[i, (self.col+'-'+v)] = 1
             elif isinstance(col_name, str):
-                X.loc[i, (self.col+col_name)] = 1
+                X.loc[i, (self.col+'-'+col_name)] = 1
             elif value is None or (value == 'nan') or (value == '') or isnan(value):
                 pass
             else:

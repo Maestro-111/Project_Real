@@ -22,6 +22,7 @@ from prop.estimate_scale import PropertyType, PropertyTypeRegexp
 from transformer.binary import BinaryTransformer
 from transformer.baths import BthsTransformer
 from transformer.bedrooms import RmsTransformer
+from transformer.dates import DatesTransformer
 from transformer.one_hot_array import OneHotArrayEncodingTransformer
 from transformer.select_col import SelectColumnTransformer
 from transformer.db_label import DbLabelTransformer
@@ -35,6 +36,7 @@ from transformer.label_map import getLevel, levelType, acType, \
     parkingDesignationType, parkingFacilityType, balconyType, \
     ptpType
 from transformer.simple_column import SimpleColumnTransformer
+from transformer.street_n_st_num import StNumStTransformer
 
 logger = BaseCfg.getLogger(__name__)
 
@@ -51,20 +53,6 @@ def yearOfByField(row, field, deltaDays=0):
 
 def yearOf(field, deltaDays=0):
     return lambda row: yearOfByField(row, field, deltaDays)
-
-
-DATE_20000101 = datetime.datetime(2000, 1, 1, 0, 0)
-
-
-def daysFrom2K(_, dayNum):
-    if isnan(dayNum):
-        return None
-    dayNum = int(dayNum)
-    day = dayNum % 100
-    year = dayNum // 10000
-    month = (dayNum // 100) - (year * 100)
-    date = datetime.datetime(year, month, day, 0, 0)
-    return abs((date - DATE_20000101).days)
 
 
 def saletpSingleValue(row, saletp):
@@ -116,14 +104,14 @@ def allTypeToIntRow(_, value):
 
 def shallDrop(row):
     try:
-        if (row['saletp_b'] == 0):
-            if (row['lp_n'] == 0) | (row['lp'] is None) | (row['lp'] < SALE_PRICE_LOWER_LIMIT):
+        if (row['saletp-b'] == 0):
+            if (row['lp-n'] == 0) | (row['lp'] is None) | (row['lp'] < SALE_PRICE_LOWER_LIMIT):
                 return True
-        if (row['saletp_b'] == 1):
-            if (row['lpr_n'] == 0) | (row['lpr'] is None) | (row['lpr'] > RENT_PRICE_UPPER_LIMIT):
+        if (row['saletp-b'] == 1):
+            if (row['lpr-n'] == 0) | (row['lpr'] is None) | (row['lpr'] > RENT_PRICE_UPPER_LIMIT):
                 return True
         if (row['lst'] in ['Sld', 'Lsd']):
-            if (row['sp_n'] == 0) | (row['sp'] is None):
+            if (row['sp-n'] == 0) | (row['sp'] is None):
                 return True
     except Exception as e:
         logger.error(row)
@@ -164,10 +152,10 @@ def balconyRow(_, value):
 
 
 SUFFIXES = {
-    '_n': 'Number',
-    '_c': 'Category Number',
-    '_b': 'Binary 0/1',
-    '_l': 'String Label',
+    '-n': 'Number',
+    '-c': 'Category Number',
+    '-b': 'Binary 0/1',
+    '-l': 'String Label',
 }
 
 
@@ -180,11 +168,11 @@ class Preprocessor(TransformerMixin, BaseEstimator):
 
     Transforming steps:
     -. drop na columns if in training mode, return error if in prediction mode.
-    -. convert binary saletp to 0 or 1, column name as 'saletp_b'
-    -. convert ptype2 to single value. column name as 'ptype2_l'
-    -. convert binary cols. column name as '_b'
-    -. convert categorical columns to integers. column name as '_n'
-    -. fill numeric columns to default values. column name as '_n'
+    -. convert binary saletp to 0 or 1, column name as 'saletp-b'
+    -. convert ptype2 to single value. column name as 'ptype2-l'
+    -. convert binary cols. column name as '-b'
+    -. convert categorical columns to integers. column name as '-n'
+    -. fill numeric columns to default values. column name as '-n'
     -. filter lat/lng to the range of [-180, 180] and drop null rows.
     """
     # binary use index as value, default 0
@@ -215,7 +203,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         'zip':      {'na': UNKNOWN},
         'rltr':     {'na': UNKNOWN},
         #        'saletp':   {'na': DROP},
-        'ptype2_l': {'na': DROP},
+        'ptype2-l': {'na': DROP},
         'pstyl':    {'na': UNKNOWN},  # 131 types
         'ptp':      {'na': UNKNOWN},  # ptpType
         'zone':     {'na': UNKNOWN},
@@ -260,14 +248,14 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         'lpr':      {'na': DROP},
         'sp':       {'na': DROP},
         # extract number parts from street number
-        'st_num':   {'to': 'st_num_n'},
-        'sqft':     {'to': 'sqft_n'},  # from sqft or rmSqft or sqft estimator
-        'rmSqft':   {'to': 'sqft_n'},  # rmSqft or sqft estimator
+        'st_num':   {'to': 'st_num-n'},
+        'sqft':     {'to': 'sqft-n'},  # from sqft or rmSqft or sqft estimator
+        'rmSqft':   {'to': 'sqft-n'},  # rmSqft or sqft estimator
         # from bltYr or rmBltYr or bltYr estimator
-        'bltYr':    {'to': 'built_yr_n'},
-        'rmBltYr':  {'to': 'built_yr_n'},  # rmBltYr or bltYr estimator
-        'ptype2':   {'to': 'ptype2_l'},  # ptype2
-        'ac':       {'to': 'ac_n'},  # ac
+        'bltYr':    {'to': 'built_yr-n'},
+        'rmBltYr':  {'to': 'built_yr-n'},  # rmBltYr or bltYr estimator
+        'ptype2':   {'to': 'ptype2-l'},  # ptype2
+        'ac':       {'to': 'ac-n'},  # ac
         'laundry_lev': {'na': NONE},
         'pets':     {'na': UNKNOWN},
     }
@@ -322,51 +310,45 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         all_cols = [*all_cols]
 
         colTransformerParams = [
-            ('saletp_b', binarySaletpByRow, 'saletp', 'saletp_b'),
-            ('ptype2_l', ptype2SingleValue, 'ptype2', 'ptype2_l'),
+            ('saletp-b', binarySaletpByRow, 'saletp', 'saletp-b'),
+            ('ptype2-l', ptype2SingleValue, 'ptype2', 'ptype2-l'),
         ]
-        all_cols.append('saletp_b')
-        all_cols.append('ptype2_l')
+        all_cols.append('saletp-b')
+        all_cols.append('ptype2-l')
         # custom transformers
         if 'onD' in all_cols:
-            colTransformerParams.append(('onD', daysFrom2K, 'onD', 'onD_n'))
-        if 'offD' in all_cols:
-            colTransformerParams.append(('offD', daysFrom2K, 'offD', 'offD_n'))
-        if 'sldd' in all_cols:
-            colTransformerParams.append(('sldd', daysFrom2K, 'sldd', 'sldd_n'))
+            datesTransformer = DatesTransformer(all_cols)
+            colTransformerParams.append(
+                ('onD', datesTransformer))
+            all_cols.extend(datesTransformer.target_cols())
         if 'pets' in all_cols:
-            colTransformerParams.append(('pets', petsRow, 'pets', 'pets_n'))
+            colTransformerParams.append(('pets', petsRow, 'pets', 'pets-n'))
         if 'laundry_lev' in all_cols:
             colTransformerParams.append(
-                ('laundry_lev', laundryLevelRow, 'laundry_lev', 'laundry_lev_n'))
+                ('laundry_lev', laundryLevelRow, 'laundry_lev', 'laundry_lev-n'))
         if 'balcony' in all_cols:
             colTransformerParams.append(
-                ('balcony', balconyRow, 'balcony', 'balcony_n'))
+                ('balcony', balconyRow, 'balcony', 'balcony-n'))
         if 'flt' in all_cols:
             colTransformerParams.append(
-                ('flt', allTypeToFloatRow, 'flt', 'flt_n'))
+                ('flt', allTypeToFloatRow, 'flt', 'flt-n'))
         if 'depth' in all_cols:
             colTransformerParams.append(
-                ('depth', allTypeToFloatRow, 'depth', 'depth_n'))
+                ('depth', allTypeToFloatRow, 'depth', 'depth-n'))
         if 'tax' in all_cols:
             colTransformerParams.append(
-                ('tax', allTypeToFloatRow, 'tax', 'tax_n'))
+                ('tax', allTypeToFloatRow, 'tax', 'tax-n'))
             colTransformerParams.append(
-                ('taxyr', taxYearRow, 'taxyr', 'taxyr_n'))
+                ('taxyr', taxYearRow, 'taxyr', 'taxyr-n'))
         if ('bltYr' in all_cols) or ('rmBltYr' in all_cols):
             colTransformerParams.append(('bltYr', SelectColumnTransformer(
-                new_col='bltYr_n', columns=['bltYr', 'rmBltYr'], func=stringToInt, as_na_value=None)))
+                new_col='bltYr-n', columns=['bltYr', 'rmBltYr'], func=stringToInt, as_na_value=None)))
         if ('sqft' in all_cols) or ('rmSqft' in all_cols):
             colTransformerParams.append(('sqft', SelectColumnTransformer(
-                new_col='sqft_n', columns=['sqft', 'rmSqft'], func=stringToInt, as_na_value=None)))
+                new_col='sqft-n', columns=['sqft', 'rmSqft'], func=stringToInt, as_na_value=None)))
         if 'st_num' in all_cols:
             colTransformerParams.append(
-                ('st_num', allTypeToIntRow, 'st_num', 'st_num_n'))
-        # rms and bths
-        if 'rms' in all_cols:
-            colTransformerParams.append(('rms', RmsTransformer()))
-        if 'bths' in all_cols:
-            colTransformerParams.append(('bths', BthsTransformer()))
+                ('st_num', allTypeToIntRow, 'st_num', 'st_num-n'))
         # array labels
         for k, v in self.cols_array_label.items():
             if k in all_cols:
@@ -374,42 +356,52 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                     transformer = OneHotArrayEncodingTransformer(
                         col=k,
                         map=v['map'],
-                        sufix='_b',
+                        sufix='-b',
                         collection=self.label_collection,
                         mode=self.mode,
                         na_value=None,
                     )
                 else:
                     transformer = OneHotArrayEncodingTransformer(
-                        k, v['map'], '_b')
+                        k, v['map'], '-b')
                 colTransformerParams.append((f'{k}_x', transformer))
                 all_cols.extend(transformer.target_cols())
         # binary columns
         for k, v in self.cols_binary.items():
             if k in all_cols:
                 colTransformerParams.append(
-                    (f'{k}_b', BinaryTransformer(v, k), k, f'{k}_b'))
-                all_cols.append(f'{k}_b')
+                    (f'{k}-b', BinaryTransformer(v, k), k, f'{k}-b'))
+                all_cols.append(f'{k}-b')
         # categorical columns
         for k, v in self.cols_label.items():
             if k in all_cols:
                 colTransformerParams.append(
-                    (f'{k}_c', DbLabelTransformer(
+                    (f'{k}-c', DbLabelTransformer(
                         self.label_collection,
                         col=k,
                         mode=self.mode,
-                        na_value=v['na'],), k, f'{k}_c'))
-                all_cols.append(f'{k}_c')
+                        na_value=v['na'],), k, f'{k}-c'))
+                all_cols.append(f'{k}-c')
         # numerical columns
         for k, v in self.cols_numeric.items():
             if k in all_cols:
                 colTransformerParams.append(
-                    (f'{k}_n', DbNumericTransformer(
+                    (f'{k}-n', DbNumericTransformer(
                         self.number_collection,
                         col=k,
                         mode=self.mode,
-                        na_value=v['na'],), k, f'{k}_n'))
-                all_cols.append(f'{k}_n')
+                        na_value=v['na'],), k, f'{k}-n'))
+                all_cols.append(f'{k}-n')
+        if 'st_num' in all_cols:
+            stNumStTransformer = StNumStTransformer()
+            colTransformerParams.append(
+                ('st_num-st', stNumStTransformer))
+            all_cols.extend(stNumStTransformer.target_cols())
+        # rms and bths
+        if 'rms' in all_cols:
+            colTransformerParams.append(('rms', RmsTransformer()))
+        if 'bths' in all_cols:
+            colTransformerParams.append(('bths', BthsTransformer()))
         # drop rows: this operation has to be done outside of the pipeline
         # the drop operation is dependent on the model's usage of columns
         drop_na_cols = []

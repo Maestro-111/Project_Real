@@ -22,8 +22,8 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
         _target_cols = []
         for n in range(BthsTransformer.maxLevel+1):  # 0-3
-            _target_cols.append(f'bth_t{n}_n')
-            _target_cols.append(f'bth_pc{n}_n')
+            _target_cols.append(f'bths-t{n}-n')
+            _target_cols.append(f'bths-pc{n}-n')
         self._target_cols = _target_cols
 
     def target_cols(self):
@@ -85,8 +85,8 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
                 level = max(
                     0, min(round(getLevel(bth.get('l', 1)) + 0.01), BthsTransformer.maxLevel))
                 t = bth.get('t', 0)
-                X.loc[index, f'bth_t{level}_n'] += t
-                X.loc[index, f'bth_pc{level}_n'] += t * bth.get('p', 0)
+                X.loc[index, f'bths-t{level}-n'] += t
+                X.loc[index, f'bths-pc{level}-n'] += t * bth.get('p', 0)
         if nanCount > 0:
             logger.warning(f'{nanCount}/{totalCount} nan values in bths')
         timer.stop(X.shape[0])

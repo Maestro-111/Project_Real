@@ -3,7 +3,7 @@ import datetime
 from enum import Enum
 import re
 
-from regex import F
+from regex import F, P
 from sympy import Q
 
 
@@ -17,7 +17,7 @@ class PropertyType:
 
 class PropertyTypeRegexp:
     DETACHED = re.compile(
-        '^Det|Detached|Cottage|Det Condo|Det W/Com Elements|Link|Rural Resid', re.IGNORECASE)
+        '^Det|^Detached|Cottage|^Det Condo|Det W/Com Elements|Link|Rural Resid', re.IGNORECASE)
     SEMI_DETACHED = re.compile(
         '^Semi-|Semi-Detached|Semi-Det Condo', re.IGNORECASE)
     TOWNHOUSE = re.compile(
@@ -44,6 +44,24 @@ class EstimateScale:
         self.area = area
         self.city = city
         self.sale = sale
+
+    def copy(
+        self,
+            datePoint: datetime = None,
+            propType: str = None,
+            prov: str = None,
+            area: str = None,
+            city: str = None,
+            sale: bool = None,
+    ):
+        return EstimateScale(
+            datePoint=datePoint or self.datePoint,
+            propType=propType or self.propType,
+            prov=prov or self.prov,
+            area=area or self.area,
+            city=city or self.city,
+            sale=sale or self.sale,
+        )
 
     def __str__(self):
         keys = [self.datePoint.strftime('%Y-%m-%d')]

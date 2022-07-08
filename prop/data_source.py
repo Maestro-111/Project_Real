@@ -2,6 +2,8 @@
 
 import time
 from base.base_cfg import BaseCfg
+from numpy import NaN
+from predictor.writeback_mixin import WriteBackMixin
 from prop.estimate_scale import EstimateScale
 from base.mongo import MongoDB
 from base.util import get_utc_datetime_from_str, print_dateframe
@@ -79,7 +81,7 @@ class DataSource:
         },
     }
     all_data_col_list: list[str] = [
-        '_id', 'onD', 'offD', 'lst', 'status',
+        '_id', 'onD', 'offD', 'sldd', 'lst', 'status',
         'prov', 'area', 'city', 'cmty', 'addr', 'uaddr',
         'st', 'st_num', 'lat', 'lng', 'unt', 'zip',
         'ptype', 'ptype2', 'saletp', 'pstyl', 'ptp',
@@ -93,10 +95,10 @@ class DataSource:
         'sqft', 'rmSqft', 'bltYr', 'rmBltYr',
         'cac_inc', 'comel_inc', 'heat_inc', 'prkg_inc',
         'hydro_inc', 'water_inc', 'all_inc', 'pvt_ent',
-        'insur_bldg', 'prkg_inc', 'tv',
+        'insur_bldg', 'tv',
+        'pets', 'laundry', 'laundry_lev',
         'daddr', 'commuId', 'park_fac',
         'comm', 'rltr', 'la', 'la2',
-        'pets', 'laundry', 'laundry_lev',
     ]
 
     def __init__(self, query: dict = None, col_list: list[str] = None):
@@ -120,7 +122,7 @@ class DataSource:
             self.df_transformed = preprocessor.fit_transform(self.df_raw)
             # groupby and reindex by EstimateScale
             self.df_grouped = self.df_transformed.set_index([
-                'saletp_b', 'ptype2_l',
+                'saletp-b', 'ptype2-l',
                 'prov', 'area', 'city',
                 '_id',
             ]).sort_index(
@@ -137,7 +139,7 @@ class DataSource:
         cols: list[str],
         date_span: int = 180,
         need_raw: bool = False,
-        suffix_list: list[str] = ['_b', '_n', '_c'],
+        suffix_list: list[str] = ['-b', '-n', '-c'],
         copy: bool = False,
         sample_size: int = None,
         filter_func: (pd.Series) = None,
@@ -158,23 +160,34 @@ class DataSource:
         # ptype2_l
         if scale.propType is not None:
             slices.append(slice(scale.propType, scale.propType))
+        else:
+            slices.append(slice(None))
         # prov, area, city
         if scale.prov is not None:
             slices.append(slice(scale.prov, scale.prov))
+        else:
+            slices.append(slice(None))
         if scale.area is not None:
             slices.append(slice(scale.area, scale.area))
+        else:
+            slices.append(slice(None))
         if scale.city is not None:
             slices.append(slice(scale.city, scale.city))
+        else:
+            slices.append(slice(None))
         slices.append(slice(None))
-        print(slices)
         rd = self.df_grouped.loc[tuple(slices), :]
+        logger.debug(f'{slices} {len(self.df_grouped.index)}=>{len(rd.index)}')
         # onD:
         rd = rd.loc[rd.onD.between(
             dateToInt(scale.datePoint - timedelta(days=date_span)),
             dateToInt(scale.datePoint)
         )]
+        logger.debug(
+            f'{scale.datePoint-timedelta(days=date_span)}-{scale.datePoint} {len(rd.index)}')
         # filter data by filter_func
         rd = rd.loc[rd.apply(filter_func, axis=1)] if filter_func else rd
+        logger.debug(f'after filter_func {len(rd.index)}')
         # sample data
         if sample_size is not None and sample_size < rd.shape[0]:
             rd = rd.sample(n=sample_size, random_state=1)
@@ -183,21 +196,44 @@ class DataSource:
         columns = []
         for col in cols:
             found = False
-            # ['_b', '_n', '_c', '_l', ]:  '_l' is only in 'ptype2_l'
+            # ['-b', '-n', '-c', '-l', ]:  '-l' is only in 'ptype2-l'
             for suffix in suffix_list:
-                if col + suffix in existing_cols:
-                    columns.append(col + suffix)
-                    found = True
-            if not found:
-                if '_b' in suffix_list:
-                    # try one hot encoding
-                    for c in existing_cols:
-                        if c.startswith(col) and c.endswith('_b'):
-                            columns.append(c)
-                            found = True
-            if need_raw or not found:
+                for c in existing_cols:
+                    if c.startswith(col) and c.endswith(suffix):
+                        columns.append(c)
+                        found = True
+            if (col in existing_cols) and (need_raw or not found):
                 columns.append(col)
+                found = True
+            if not found:
+                print(f'column[{col}] not found')
         columns = list(dict.fromkeys(columns))  # remove duplicates
         rd = rd.loc[:, columns]
         # return dataframe or copy
         return rd.copy() if copy else rd
+
+    def writeback(
+        self,
+        predictor: WriteBackMixin,
+        new_col: str,
+        scale: EstimateScale,
+        cols: list[str],
+        date_span: int = 180,
+        need_raw: bool = False,
+        suffix_list: list[str] = ['-b', '-n', '-c'],
+        orig_col: str = None,
+    ):
+        """Writeback dataframe to df_grouped.
+        """
+        if new_col not in self.df_grouped.columns:
+            # need to set dtype as number
+            self.df_grouped.loc[:, new_col] = NaN
+        # TODO: why only get part of the matched df
+        df = self.get_df(
+            scale, cols, date_span, need_raw, suffix_list, copy=False)
+        y = predictor.get_writeback(df, orig_col)
+        logger.debug(
+            f'writeback df:{df.shape} y({new_col}):{len(y)} type:{y.dtype}')
+        df.loc[:, new_col] = y
+        self.df_grouped.update(df.loc[:, new_col])
+        # print(self.df_grouped)

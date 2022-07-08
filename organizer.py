@@ -6,6 +6,7 @@
 #    - hold data in memory
 #  2. train models.
 #    - load encoder database if not yet
+#    - train and writeback predictors
 #    - train models
 #    - save models
 #  3. predict results.
@@ -18,16 +19,20 @@ import socket
 import sys
 from pandas import DataFrame
 from base.timer import Timer
+from base.util import dateFromNum
 import numpy as np
 import pandas as pd
+from predictor.rent_value import RentValue, RentValueEstimator
+from predictor.value import Value, ValueEstimator
+from predictor.writeback_mixin import WriteBackMixin
 import psutil
 from base.base_cfg import BaseCfg
-from base.const import CONCURRENT_PROCESSES_MAX, Mode
+from base.const import CONCURRENT_PROCESSES_MAX, DEFAULT_DATE_POINT_DATE, DEFAULT_START_DATA_DATE, Mode
 from base.mongo import MongoDB
 from base.store_gridfs import GridfsStore
 from base.sysDataHelpers import setSysdataTs
-from predictor.built_year import BuiltYear
-from predictor.sqft import Sqft
+from predictor.built_year import BuiltYear, BuiltYearEstimator
+from predictor.sqft import Sqft, SqftEstimator
 from prop.data_source import DataSource
 from prop.estimate_scale import EstimateScale, PropertyType
 from transformer.preprocessor import Preprocessor
@@ -51,14 +56,31 @@ class Organizer:
             prefix='ml_',
         )
         self.root_preprocessor: Preprocessor = None
+        self.writeback_predictors = []
         self.predictors = []
-        self.default_scale = EstimateScale(
-            datePoint=datetime.datetime(2022, 2, 1, 0, 0),
+        self.default_all_scale = EstimateScale(
+            datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
+            propType=PropertyType.DETACHED,
+            prov='ON',
+            area='Toronto',
+            city='Toronto',
+            sale=None,
+        )
+        self.default_sale_scale = EstimateScale(
+            datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
             propType=PropertyType.DETACHED,
             prov='ON',
             area='Toronto',
             city='Toronto',
             sale=True,
+        )
+        self.default_rent_scale = EstimateScale(
+            datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
+            propType=PropertyType.DETACHED,
+            prov='ON',
+            area='Toronto',
+            city='Toronto',
+            sale=False,
         )
         self.num_procs = CONCURRENT_PROCESSES_MAX
         self.__update_status('program', 'run')
@@ -85,41 +107,73 @@ class Organizer:
         self.__update_status('init transformers', 'run')
         query = {
             # '_id': {'$in': ['TRBW474049', 'TRBW4874697']},
-            'onD': {'$gt': 20200101},
+            'onD': {'$gt': DEFAULT_START_DATA_DATE},
         }
-        query = {**query, **self.default_scale.get_query()}
+        query = {**query, **self.default_all_scale.get_query()}
         self.data_source = DataSource(query=query)
         self.root_preprocessor = Preprocessor(Mode.TRAIN)
         self.data_source.load_data(self.root_preprocessor)
         self.__update_status('init transformers', 'done')
+
+    def train_writeback_predictors(self):
+        """Train predictors."""
+        self.__update_status('train writeback predictors', 'run')
+        if self.data_source is None:
+            self.init_transformers()
+        self.writeback_predictors.clear()
+        for Predictor in [BuiltYearEstimator, SqftEstimator, ValueEstimator]:
+            predictor = Predictor(
+                data_source=self.data_source,
+                model_store=self.model_store,
+                scale=self.default_sale_scale,
+            )
+            self.writeback_predictors.append(predictor)
+            # later predictor needs the results of previous predictors
+            self.__predictor_train_and_writeback(predictor)
+        # TODO:
+        return
+        for Predictor in [RentValueEstimator]:
+            predictor = Predictor(
+                data_source=self.data_source,
+                model_store=self.model_store,
+                scale=self.default_rent_scale,
+            )
+            self.writeback_predictors.append(predictor)
+            self.__predictor_train_and_writeback(predictor)
+        # self.__train_predictors()
+        self.__update_status('train writeback predictors', 'done')
+
+    def __predictor_train_and_writeback(self, predictor):
+        score = predictor.train()
+        logger.info(f'{predictor.name} score: {score:.4f}')
+        if getattr(predictor, 'writeback', None) is not None:
+            predictor.writeback()
 
     def train_predictors(self):
         """Train predictors."""
         self.__update_status('train predictors', 'run')
         if self.data_source is None:
             self.init_transformers()
+        self.__build_predictors()
         self.__train_predictors()
+        # self.__train_predictors()
         self.__update_status('train predictors', 'done')
+
+    def __build_predictors(self):
+        """Build predictors."""
+        self.predictors.clear()
+        for Predictor in [BuiltYear, Sqft, Value]:
+            self.predictors.append(Predictor(
+                data_source=self.data_source,
+                model_store=self.model_store,
+                scale=self.default_scale,
+            ))
 
     def __train_predictors(self):
         """Create predictors and train them."""
-        #self.__update_status('__train predictors', 'run')
-        self.predictors.clear()
-        self.predictors.append(BuiltYear(
-            data_source=self.data_source,
-            model_store=self.model_store,
-            scale=self.default_scale,
-        ))
-        self.predictors.append(Sqft(
-            data_source=self.data_source,
-            model_store=self.model_store,
-            scale=self.default_scale,
-        ))
-
         # for predictor in self.predictors:
         #     score = predictor.train()
         #     logger.info(f'{predictor.name} score: {score:.4f}')
-
         num_procs = min((psutil.cpu_count(logical=False) - 1),
                         CONCURRENT_PROCESSES_MAX,
                         self.num_procs,

@@ -4,7 +4,9 @@ from math import isnan
 
 
 import pandas as pd
+from predictor.LGBMRegressor import LGBMRegressorPredictor
 from predictor.base_predictor import BasePredictor
+from predictor.writeback_mixin import WriteBackMixin
 from prop.data_source import DataSource
 
 from base.base_cfg import BaseCfg
@@ -19,16 +21,63 @@ logger = BaseCfg.getLogger(__name__)
 
 
 def needSqft(row):
-    return not (row['sqft_n'] is None or isnan(row['sqft_n']))
+    return not (row['sqft-n'] is None or isnan(row['sqft-n']))
 
 
-class Sqft(BasePredictor):
+class SqftEstimator(LGBMRegressorPredictor, WriteBackMixin):
     """Sqft Estimator class"""
-    base_model_params = {
-        'n_estimators': 300,
-        'max_depth': -1,
-        'num_leaves': 100,
-    }
+
+    def __init__(
+        self,
+        data_source: DataSource,
+        scale: EstimateScale = None,
+        model_store=None,
+    ):
+        super().__init__(
+            name='SqftEstimator',
+            data_source=data_source,
+            source_filter_func=needSqft,
+            source_date_span=365*18,
+            source_suffix_list=['-n', '-c'],  # , '-b'],
+            scale=scale,
+            model_store=model_store,
+            y_numeric_column='sqft-n',
+            y_column='sqft-n',
+            x_columns=[
+                'lat', 'lng',
+                'bthrms', 'pstyl',
+                'rms', 'bths',
+                'bdrms', 'tbdrms', 'br_plus', 'bthrms', 'kch', 'kch_plus',
+                'zip',  'gatp',
+                'depth', 'flt',
+                'st_num-st-n',
+                'ptp', 'pstyl', 'constr', 'feat',
+                'bsmt',  'heat', 'park_fac',
+                'st', 'st_num',
+            ],
+        )
+        # 'sqft',
+        # self.col_list = [
+        #     'lat', 'lng', 'rmBltYr',
+        #     'cs16', 'st_num', 'st', 'zip', 'sid',
+        #     'gatp', 'flt', 'depth', 'gr', 'tgr', 'pstyl', 'bthrms',
+        # ]
+        # self.y_column = 'rmBltYr'
+        # self.x_columns = [
+        #     'lat', 'lng',
+        #     'zip',  'gatp', 'bthrms',
+        #     'st', 'st_num', 'st_num-st',
+        # ]
+        # self.categorical_feature = ['st', 'zip', 'gatp']
+
+    def writeback(self):
+        return super().writeback(
+            new_col='sqft-e',
+            orig_col='sqft-n')
+
+
+class Sqft(LGBMRegressorPredictor):
+    """Sqft Estimator class"""
 
     def __init__(
         self,
@@ -41,11 +90,11 @@ class Sqft(BasePredictor):
             data_source=data_source,
             source_filter_func=needSqft,
             source_date_span=365*18,
-            source_suffix_list=['_n', '_c'],  # , '_b'],
+            source_suffix_list=['-n', '-c'],  # , '-b'],
             scale=scale,
             model_store=model_store,
-            y_numeric_column='sqft_n',
-            y_column='sqft_n',
+            y_numeric_column='sqft-n',
+            y_column='sqft-n',
             x_columns=[
                 'lat', 'lng',
                 'zip',  'gatp',
@@ -55,72 +104,6 @@ class Sqft(BasePredictor):
                 'bsmt',  'heat', 'park_fac',
                 'depth', 'flt', 'rms', 'bths',
                 'sqft',
+                'st_num-st-n',
             ],
         )
-        # self.col_list = [
-        #     'lat', 'lng', 'rmBltYr',
-        #     'cs16', 'st_num', 'st', 'zip', 'sid',
-        #     'gatp', 'flt', 'depth', 'gr', 'tgr', 'pstyl', 'bthrms',
-        # ]
-        # self.y_column = 'rmBltYr'
-        # self.x_columns = [
-        #     'lat', 'lng',
-        #     'zip',  'gatp', 'bthrms',
-        #     'st', 'st_num', 'st_num_st',
-        # ]
-        # self.categorical_feature = ['st', 'zip', 'gatp']
-
-    def prepare_model(self):
-        super().prepare_model()
-        if self.model is None:
-            self.model_params = copy.copy(Sqft.base_model_params)
-            self.model = lgb.LGBMRegressor(**self.model_params)
-            logger.info('Sqft: model_params: {}'.format(
-                self.model_params))
-
-    def prepare_data(self, X, params=None):
-        """Prepare data for training"""
-        X = X.copy()
-        # poly = PolynomialFeatures(2)
-        # poly.fit_transform(X_train)
-        X['st_c'].fillna(0, inplace=True)
-        X['st_num_st_n'] = (X['st_c'].astype(int) + 1) * 100000 + X['st_num_n']
-        X.dropna(inplace=True)
-        self.generate_numeric_columns()
-        return X
-
-
-def testSqftByType(propType: PropertyType, city: str = 'Toronto'):
-    scale = EstimateScale(
-        datePoint=datetime.datetime(2022, 2, 1, 0, 0),
-        propType=propType,
-        prov='ON',
-        city=city,
-    )
-    builtYearEstimator = Sqft()
-    builtYearEstimator.set_scale(scale)
-    builtYearEstimator.set_query(query={'rmBltYr': {'$ne': None}})
-    # best_span, best_score = builtYearEstimator.tune()
-    # print('**********************')
-    # print(f'best: {best_score} => {best_span} days',
-    #       scale.propType, scale.city)
-    # print('**********************')
-    builtYearEstimator.load_data(
-        date_span=2922, query=builtYearEstimator.db_query)
-    score = builtYearEstimator.train()
-    print('**********************')
-    print(f'{scale.city}:{propType} => {score}')
-    print('**********************')
-
-
-def testSqft():
-    # for propType in [PropertyType.CONDO, PropertyType.TOWNHOUSE, PropertyType.SEMI_DETACHED, PropertyType.DETACHED]:
-    #     for city in ['Toronto', 'Mississauga', 'Brampton', 'Markham', 'Oakville']:
-    for propType in [PropertyType.DETACHED]:
-        for city in ['Toronto', 'Mississauga', 'Brampton', 'Markham', 'Oakville']:
-            testSqftByType(propType, city)
-        print('----------------------------------------------------------------')
-
-
-if __name__ == '__main__':
-    testSqft()

@@ -26,7 +26,7 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
         pass
 
     def target_cols(self):
-        return ['rm_p_size_n', 'rm_p_area_n', 'rm_t_size_n', 'rm_t_area_n']
+        return ['rms-p_size-n', 'rms-p_area-n', 'rms-t_size-n', 'rms-t_area-n']
 
     def fit(self, X, y=None):
         """Fit the model according to the given training data.
@@ -88,15 +88,15 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
                     w = rm.get('w', 0) or 0
                     h = rm.get('h', 0) or 0
                     if self.masterReg.match(t):
-                        X.loc[index, 'rm_p_size_n'] = w + h
-                        X.loc[index, 'rm_p_area_n'] = w * h
+                        X.loc[index, 'rms-p_size-n'] = w + h
+                        X.loc[index, 'rms-p_area-n'] = w * h
                         totalSize += w + h
                         totalArea += w * h
                     elif self.bedroomReg.match(t) and getLevel(rm.get('l', 1)) >= 1:
                         totalSize += w + h
                         totalArea += w * h
-            X.loc[index, 'rm_t_size_n'] = totalSize
-            X.loc[index, 'rm_t_area_n'] = totalArea
+            X.loc[index, 'rms-t_size-n'] = totalSize
+            X.loc[index, 'rms-t_area-n'] = totalArea
         if nanCount > 0:
             logger.warning(f'{nanCount}/{totalCount} nan values in rms')
         timer.stop(totalCount)

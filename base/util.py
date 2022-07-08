@@ -7,6 +7,12 @@ from datetime import datetime, timezone
 UTC_OFFSET_TIMEDELTA = datetime.utcnow() - datetime.now()
 
 
+def selectFromTwo(a, b):
+    if (a is not None) and (not isnan(a)):
+        return a
+    return b
+
+
 def utc_to_local(utc_dt):
     return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None)
 
@@ -90,3 +96,23 @@ def stringToInt(value):
     if (isinstance(value, float) or isinstance(value, int)) and not isnan(value):
         return int(value)
     return None
+
+
+def dateFromNum(dayNum):
+    if isnan(dayNum):
+        return None
+    dayNum = int(dayNum)
+    day = dayNum % 100
+    year = dayNum // 10000
+    month = (dayNum // 100) - (year * 100)
+    if month < 1:
+        month = 1
+        print(f'month < 1 : {dayNum}')
+    if month > 12:
+        if dayNum < 2000001:  # there are numbers like 2017125
+            year = dayNum // 1000
+            month = (dayNum % 1000) // 100
+        if month > 12:
+            month = 12
+            print(f'month > 12 : {dayNum}')
+    return datetime(year, month, day, 0, 0)

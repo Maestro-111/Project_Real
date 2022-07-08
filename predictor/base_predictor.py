@@ -13,6 +13,7 @@ from base.util import print_dateframe
 from sklearn.metrics import explained_variance_score, accuracy_score, r2_score
 from base.store_file import FileStore
 from numpy import mean, std
+from sklearn.feature_selection import SelectKBest, f_regression
 
 logger = BaseCfg.getLogger(__name__)
 
@@ -39,7 +40,6 @@ class BasePredictor(BaseEstimator):
         scale: EstimateScale = None,
         model=None,
         model_params: dict = None,
-        col_list: list[str] = None,
         x_columns: list[str] = None,
         x_required: list[str] = None,
         y_column: str = None,
@@ -49,6 +49,8 @@ class BasePredictor(BaseEstimator):
         source_suffix_list: list[str] = None,
         model_store=None,
         model_class: ModelClass = ModelClass.Regression,
+        prefer_estimated_value: bool = True,
+        logger=None
     ) -> None:
         self.data_source = data_source
         self.name = name if name else self.__class__.__name__
@@ -56,16 +58,14 @@ class BasePredictor(BaseEstimator):
         self.model_params = model_params
         self.model_class = model_class
         self.scale = scale
-        self.col_list = col_list
         self.x_columns = x_columns
         self.x_required = x_required if x_required else x_columns
         self.y_column = y_column
         self.y_numeric_column = y_numeric_column if y_numeric_column else y_column
-        self.col_list = self.x_columns.copy()
-        self.col_list.append(self.y_column)
         self.source_filter_func = source_filter_func
         self.source_date_span = source_date_span
         self.source_suffix_list = source_suffix_list
+        self.prefer_estimated_value = prefer_estimated_value
         if model_store is None:
             self.store = FileStore()
         else:
@@ -76,7 +76,7 @@ class BasePredictor(BaseEstimator):
         self.df_prepared = None
         self.trained_seconds = 0
         self.predict_per_second = 0
-        self.logger = BaseCfg.getLogger(self.name)
+        self.logger = logger or BaseCfg.getLogger(self.name)
 
     def load_model(self):
         """Load the model"""
@@ -109,6 +109,8 @@ class BasePredictor(BaseEstimator):
             'trained_seconds': self.trained_seconds,
             'predict_per_second': self.predict_per_second,
             'model_params': self.model_params,
+            'cv_mean': self.cv_mean,
+            'cv_std': self.cv_std,
         }
 
     # TODO: implement the following methods
@@ -131,6 +133,8 @@ class BasePredictor(BaseEstimator):
         """Load the data"""
         if self.data_source is None:
             raise ValueError('Data source is not specified.')
+        self.col_list = self.x_columns.copy()
+        self.col_list.append(self.y_column)
         self.df = self.data_source.get_df(
             scale=self.scale,
             cols=self.col_list,
@@ -138,7 +142,7 @@ class BasePredictor(BaseEstimator):
             filter_func=filter_func or self.source_filter_func,
             suffix_list=suffix_list or self.source_suffix_list,
         )
-        logger.info(f'Data loaded. {self.source_suffix_list}')
+        self.logger.info(f'Data loaded. {self.source_suffix_list}')
         self.generate_numeric_columns()
         return self.df
 
@@ -165,9 +169,52 @@ class BasePredictor(BaseEstimator):
                      self.df[col].dtype == 'int64'):
                     self.x_numeric_columns_.append(col)
             except Exception as e:
-                logger.error(
+                self.logger.error(
                     f'Error in generating numeric column:{col} error:{e}')
+        if self.prefer_estimated_value:
+            new_cols = self.x_numeric_columns_.copy()
+            for col in self.x_numeric_columns_:
+                if col.endswith('-e'):
+                    orig_col = col[:-2] + '_n'
+                    if orig_col in self.x_numeric_columns_:
+                        new_cols.remove(orig_col)
+            self.x_numeric_columns_ = new_cols
         return self.x_numeric_columns_
+
+    # feature selection
+    def select_features(self, X_train, y_train, X_test):
+        # configure to select all features
+        fs = SelectKBest(score_func=f_regression, k='all')
+        # learn relationship from training data
+        fs.fit(X_train, y_train)
+        # transform train input data
+        X_train_fs = fs.transform(X_train)
+        # transform test input data
+        X_test_fs = fs.transform(X_test)
+        self.logger.debug('select feature', fs)
+        return X_train_fs, X_test_fs, fs
+
+    def feature_select(self):
+        """Try to select minimium features used"""
+        orig_x_cols = self.x_columns.copy()
+        results = []
+        while len(self.x_columns) >= 3:
+            self.df_prepared = None
+            self.df = None
+            self.prepare_model(reset=True)
+            score = self.train()
+            cols = self.x_columns.copy()
+            results.append((score, cols))
+            self.logger.info(f'Score:{score} features:{cols}')
+            removed = self.x_columns.pop()
+            self.logger.debug(
+                f'Removed feature: {removed} left: {len(self.x_columns)}')
+
+        def score_sort(tpl: tuple):
+            return tpl[0]
+        results.sort(key=score_sort)
+        self.logger.info(results)
+        self.x_columns = orig_x_cols
 
     def train(self):
         """Train the model"""
@@ -183,8 +230,9 @@ class BasePredictor(BaseEstimator):
         #     X, y, random_state=0)
         timer = Timer(self.name, self.logger)
         self.prepare_model()
-        self.fit(self.df_train[self.x_numeric_columns_],
-                 self.df_train[self.y_numeric_column])
+        self.fit(
+            self.df_train[self.x_numeric_columns_],
+            self.df_train[self.y_numeric_column])
         self.pred_accuracy_score = self.test(
             X=None,
             X_test=self.df_test[self.x_numeric_columns_],
@@ -200,8 +248,8 @@ class BasePredictor(BaseEstimator):
 
     def cross_val(self, X=None, y=None):
         if X is None or y is None:
-            X = self.df_train[self.x_numeric_columns_]
-            y = self.df_train[self.y_numeric_column]
+            X = self.df_test[self.x_numeric_columns_]
+            y = self.df_test[self.y_numeric_column]
         # cross validation with k-fold
         cv = RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)
         n_scores = cross_val_score(
@@ -213,14 +261,16 @@ class BasePredictor(BaseEstimator):
             n_jobs=-1,
             error_score='raise'
         )
-        logger.info('MAE: %.3f (%.3f)' % (mean(n_scores), std(n_scores)))
+        self.cv_mean = mean(n_scores)
+        self.cv_std = std(n_scores)
+        self.logger.info(f'MAE: {self.cv_mean:.3f} ({self.cv_std:.3f})')
 
     def test(self, X, y, X_test=None):
         """Calculate the accuracy of the model."""
         if X_test is None:
             X_test = self.prepare_data(X)
         y_pred = self.predict(X_test)
-        self.pred_accuracy_score = round(self.get_score(y, y_pred) * 100)
+        self.pred_accuracy_score = round(self.get_score(y, y_pred) * 10000)
         return self.pred_accuracy_score
 
     def get_score(self, y_true, y_pred):

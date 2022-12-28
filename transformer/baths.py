@@ -5,29 +5,39 @@ import pandas as pd
 from base.base_cfg import BaseCfg
 from base.timer import Timer
 from sklearn.base import BaseEstimator, TransformerMixin
-from transformer.label_map import getLevel
+from transformer.const_label_map import getLevel
 
 logger = BaseCfg.getLogger(__name__)
 
 
 class BthsTransformer(BaseEstimator, TransformerMixin):
     """bths transformer.
+    transform bths to bths-t0-n, bths-t1-n, bths-t2-n, bths-t3-n, bths-pc0-n, bths-pc1-n, bths-pc2-n, bths-pc3-n
 
     Parameters
     ----------
-
+    None
     """
     maxLevel = 3
 
     def __init__(self):
+        """Initialize the class."""
+        pass
+
+    def get_feature_names_out(self):
+        if hasattr(self, '_target_cols'):
+            return self._target_cols
         _target_cols = []
         for n in range(BthsTransformer.maxLevel+1):  # 0-3
             _target_cols.append(f'bths-t{n}-n')
             _target_cols.append(f'bths-pc{n}-n')
         self._target_cols = _target_cols
-
-    def target_cols(self):
         return self._target_cols
+
+    def set_params(self, **params):
+        ret = super().set_params(**params)
+        self._target_cols = None
+        return ret
 
     def fit(self, X, y=None):
         """Fit the model according to the given training data.
@@ -45,6 +55,7 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
         self : object
             Returns self.
         """
+
         logger.debug(f'fit rms')
         return self
 
@@ -66,7 +77,7 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
         timer.start()
         nanCount = 0
         totalCount = 0
-        for col in self.target_cols():
+        for col in self.get_feature_names_out():
             X[col] = 0
         for index, bths in X.loc[:, 'bths'].items():
             totalCount += 1

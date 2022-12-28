@@ -5,11 +5,11 @@ from math import isnan
 import pandas as pd
 from predictor.LGBMRegressor import LGBMRegressorPredictor
 from predictor.writeback_mixin import WriteBackMixin
-from prop.data_source import DataSource
+from data.data_source import DataSource
 
 from base.base_cfg import BaseCfg
 from base.util import print_dateframe
-from prop.estimate_scale import EstimateScale, PropertyType
+from data.estimate_scale import EstimateScale, PropertyType
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.preprocessing import Normalizer
 

@@ -1,4 +1,31 @@
+# Predictor
+
+## Overview
+
+Base knowledge:
+(Grid Search)[https://scikit-learn.org/stable/modules/grid_search.html#grid-search]
+(GridSearchCV)[https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html#sklearn.model_selection.GridSearchCV]
+(Feature Selection)[https://scikit-learn.org/stable/modules/feature_selection.html#feature-selection]
+
+(Feature Extraction)[https://scikit-learn.org/stable/modules/feature_extraction.html#feature-extraction]
+(Feature Scaling)[https://scikit-learn.org/stable/modules/preprocessing.html#preprocessing]
+(Feature Transformation)[https://scikit-learn.org/stable/modules/preprocessing.html#preprocessing]
+
+(Ensemble)[https://scikit-learn.org/stable/modules/ensemble.html#ensemble]
+
 # Classes
+
+- RmBaseEstimateManager
+  is the base class for all estimator managers, each estimator manager is responsible for one type of estimation.
+  - writeBack: write back to datasource
+  - train: train the model
+  - estimate: estimate the value
+  - save: save the model
+  - load: load the model
+- RmBaseEstimator
+  is the base class for all estimators, each estimator is responsible for one type of estimation for one scale.
+
+  -
 
 - Estimator: base class for all estimaters
   - public properties:

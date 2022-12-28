@@ -26,6 +26,45 @@ def select_features(X_train, y_train, X_test=None):
     return X_train_fs, fs, X_test_fs
 
 
+def extract_raw_name(name: str) -> str:
+    return name.split('-')[0]
+
+
+def raw_feature_sort(nameScores: list[tuple]) -> list[tuple]:
+    """Sort the features by their raw score.
+    """
+    nameScoreDict = {}  # name: score
+    for name, score in nameScores:
+        name = extract_raw_name(name)
+        if name not in nameScoreDict:
+            nameScoreDict[name] = score
+        else:
+            nameScoreDict[name] += score
+    nameScoreList = sorted(
+        nameScoreDict.items(),
+        key=lambda x: x[1],
+        reverse=True)
+    return nameScoreList
+
+
+def changeRate(scores):
+    change = []
+    for i in range(0, len(scores)-1):
+        num = scores[i] - scores[i+1]
+        change.append(num)
+    return change
+
+
+def plot_scores(self, scores: list[float]):
+    # plot the scores
+    # scores.sort()
+    scores = scores.copy()
+    scores.reverse()
+    scores = np.flip(scores, axis=0)
+    pyplot.bar([i for i in range(len(scores))], scores)
+    pyplot.show()
+
+
 class FeatureSelector():
     def __init__(
         self,
@@ -45,10 +84,8 @@ class FeatureSelector():
         drop_any_na: bool = False,
     ):
         """Prepare data for training"""
-        useSelf = False
         if df is None:
             df = self.df
-            useSelf = True
         if copy:
             df = df.copy()
         rowsBefore = df.shape[0]
@@ -126,8 +163,11 @@ class FeatureSelector():
                 result_cols.remove(col)
         return df, result_cols
 
-    def find_features(self, y_col: str, exclude_cols: list[str] = None):
-        self.y_col = y_col
+    def find_features(self, y_col: str = None, exclude_cols: list[str] = None):
+        if y_col is None:
+            y_col = self.y_col
+        if y_col is None:
+            raise ValueError('y_col is None')
         df = self.prepare_data()
         cols = self.generate_numeric_columns(df)
         df = df[cols]
@@ -152,11 +192,26 @@ class FeatureSelector():
             print(f'{k}:{v}')
         return name_scores, scores
 
-    def plot_scores(self, scores: list[float]):
-        # plot the scores
-        scores.sort()
-        scores = np.flip(scores, axis=0)
-        pyplot.bar([i for i in range(len(scores))], scores)
-        pyplot.show()
+    # return three levels of features and all features with scores
+    def find_raw_features(self, y_col: str = None, exclude_cols: list[str] = None):
+        name_scores, scores = self.find_features(y_col, exclude_cols)
+        name_scores = raw_feature_sort(name_scores)
+        scores = [x[1] for x in name_scores]
+        changes = changeRate(scores)
+        changeOfChanges = changeRate(changes)
+        # lowest change index
+        lowestChangeIndex = np.argmin(changeOfChanges)
+        firstLevelFeatures = name_scores[0:lowestChangeIndex+2+1]
+        remainingChangeOfChanges = changeOfChanges[lowestChangeIndex+1:]
+        # second lowest change index
+        secondLowestChangeIndex = np.argmin(remainingChangeOfChanges)
+        secondLevelFeatures = name_scores[
+            0:lowestChangeIndex+2+1+secondLowestChangeIndex+1]
+        remainingChangeOfChanges = changeOfChanges[secondLowestChangeIndex+2:]
+        # third lowest change index
+        thirdLowestChangeIndex = np.argmin(remainingChangeOfChanges)
+        thirdLevelFeatures = name_scores[
+            0:lowestChangeIndex+2+1+secondLowestChangeIndex+1+thirdLowestChangeIndex+2]
+        return [firstLevelFeatures, secondLevelFeatures, thirdLevelFeatures, name_scores]
 
 # find_features_for_y('bltYr_n')

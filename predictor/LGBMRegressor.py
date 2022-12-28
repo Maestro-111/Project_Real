@@ -33,6 +33,7 @@ class LGBMRegressorPredictor(BasePredictor):
         rowsBefore = X.shape[0]
         colsBefore = X.shape[1]
         X.dropna(axis='columns', how='all', inplace=True)
+        X = X.loc[:, (X != 0).any(axis=0)]
         colsAfter = X.shape[1]
         X.dropna(inplace=True)
         rowsAfter = len(X.index)

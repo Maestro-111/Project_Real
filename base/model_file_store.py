@@ -4,18 +4,17 @@ import pickle
 import re
 import json
 
+from base.model_store import ModelStore
 
-class FileStore:
+
+class FileStore(ModelStore):
     dir = None
 
-    def __init__(self, dir=None, prefix=''):
+    def __init__(self, dir=None, prefix='ml_'):
         self.dir = dir
         self.prefix = prefix
 
-    def set_prefix(self, prefix):
-        self.prefix = prefix
-
-    def save_data(self, filename, data, accuracy=0, meta: dict = None):
+    def save_model(self, filename, data, accuracy=0, meta: dict = None):
         """Save the model."""
         filename = self.prefix + filename
         fullpath = os.path.join(
@@ -30,7 +29,7 @@ class FileStore:
             json_file.close()
         return fullpath
 
-    def load_data(self, filename):
+    def load_model(self, filename):
         """Load the model."""
         filename = self.prefix + filename
         files = [
@@ -42,7 +41,7 @@ class FileStore:
             files.sort(reverse=True)
             fullpath = os.path.join(self.dir, files[0])
         else:
-            raise ValueError('No model file found.')
+            raise FileNotFoundError('No model file found.')
         with open(fullpath, 'rb') as f:
             data = pickle.load(f)
         pattern = re.compile(r".*\.(\d{3})\.pkl")

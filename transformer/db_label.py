@@ -47,17 +47,33 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         na_value=None,
         save_to_db: bool = SAVE_LABEL_TO_DB,
     ):
-        if collection is None:
-            return
         self.collection = collection
         self.col = col
         self.mode = mode
         self.na_value = na_value
         self.save_to_db = save_to_db
+
+    def get_feature_names(self):
+        return [self.col+'-c']
+
+    def set_params(self, **params):
+        ret = super().set_params(**params)
+        self._connect_db()
+        return ret
+
+    def _connect_db(self):
+        if hasattr(self, '_db_connected') and self._db_connected:
+            return
+        if not self.collection:
+            logger.warn("No collection specified")
+            return
+        if self.mode is Mode.TRAIN and not self.save_to_db:
+            return
         # create index on col
         MongoDB = getMongoClient()
-        MongoDB.createIndex(self.collection, fields=[
-            ("col", 1), ('i', 1)], unique=True)
+        if not MongoDB.hasIndex(self.collection, 'col'):
+            MongoDB.createIndex(self.collection, fields=[
+                ("col", 1), ('i', 1)], unique=True)
         # load from database when predicting
         if self.mode == Mode.PREDICT:
             self.labels_ = {}
@@ -68,6 +84,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
                 self.labels_index_[doc['col']][doc['i']] = doc['label']
                 if doc['i'] > self.labels_index_next_[self.col]:
                     self.labels_index_next_[self.col] = doc['i']
+        self._db_connected = True
 
     def _save_mapping(self, col: str, label: str, index: int, count: int):
         if not self.save_to_db:
@@ -96,6 +113,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         """
         logger.debug(
             f'label {self.col} fit {self.mode}')
+        self._connect_db()
         # X = check_array(X, accept_sparse=True)
 
         # self.n_features_ = X.shape[1]
@@ -164,6 +182,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         # we may need to use a wrapper here
         # X = pd.DataFrame(X)
         logger.debug(f'label {self.col} transform {self.mode}')
+        self._connect_db()
         if self.mode == Mode.TRAIN:
             if (getattr(self, 'labels_', None) is None) or (self.col not in self.labels_):
                 self.fit(X)

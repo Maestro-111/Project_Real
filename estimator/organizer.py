@@ -29,14 +29,22 @@ import psutil
 from base.base_cfg import BaseCfg
 from base.const import CONCURRENT_PROCESSES_MAX, DEFAULT_DATE_POINT_DATE, DEFAULT_START_DATA_DATE, Mode
 from base.mongo import MongoDB
-from base.store_gridfs import GridfsStore
+from base.model_gridfs_store import GridfsStore
 from base.sysDataHelpers import setSysdataTs
 from predictor.built_year import BuiltYear, BuiltYearEstimator
 from predictor.sqft import Sqft, SqftEstimator
-from prop.data_source import DataSource
-from prop.estimate_scale import EstimateScale, PropertyType
+from data.data_source import DataSource
+from data.estimate_scale import EstimateScale, PropertyType
 from transformer.preprocessor import Preprocessor
 import concurrent.futures
+
+from estimator.builtyear_lgbm_estimate_manager import BuiltYearLgbmManager
+from estimator.sqft_lgbm_estimate_manager import SqftLgbmEstimateManager
+from estimator.rent_lgbm_estimate_manager import RentLgbmManager
+from estimator.value_lgbm_estimate_manager import ValueLgbmEstimateManager
+from estimator.soldprice_lgbm_estimate_manager import SoldPriceLgbmEstimateManager
+
+
 logger = BaseCfg.getLogger(__name__)
 
 
@@ -60,15 +68,15 @@ class Organizer:
         self.predictors = []
         self.default_all_scale = EstimateScale(
             datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
-            propType=PropertyType.DETACHED,
+            propType=None,  # PropertyType.DETACHED,
             prov='ON',
-            area='Toronto',
-            city='Toronto',
+            area='Peel',
+            city='Mississauga',
             sale=None,
         )
         self.default_sale_scale = EstimateScale(
             datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
-            propType=PropertyType.DETACHED,
+            propType=PropertyType.SEMI_DETACHED,
             prov='ON',
             area='Toronto',
             city='Toronto',
@@ -83,6 +91,9 @@ class Organizer:
             sale=False,
         )
         self.num_procs = CONCURRENT_PROCESSES_MAX
+        self.estimate_managers = {}
+        # self.similar_properties = {'on': {}, 'off': {}}
+        # self.timed_values = {'sale':{}, 'rent':{}}
         self.__update_status('program', 'run')
 
     def __update_status(self, job, status):
@@ -102,18 +113,45 @@ class Organizer:
         self.mongodb.close()
         logger.info('Organizer end')
 
-    def init_transformers(self):
-        """Initialize the internal structures for transform and hold data in memory."""
-        self.__update_status('init transformers', 'run')
+    def load_data(self):
+        """Load data from database."""
+        self.__update_status('load data', 'run')
         query = {
             # '_id': {'$in': ['TRBW474049', 'TRBW4874697']},
             'onD': {'$gt': DEFAULT_START_DATA_DATE},
         }
-        query = {**query, **self.default_all_scale.get_query()}
-        self.data_source = DataSource(query=query)
+        self.data_source = DataSource(
+            scale=self.default_all_scale,
+            query=query)
+        self.data_source.load_raw_data()
+        self.__update_status('load data', 'done')
+
+    def init_transformers(self):
+        """Initialize the internal structures for transform and hold data in memory."""
+        self.__update_status('init transformers', 'run')
+        if self.data_source is None:
+            self.load_data()
         self.root_preprocessor = Preprocessor(Mode.TRAIN)
-        self.data_source.load_data(self.root_preprocessor)
+        self.data_source.transform_data(self.root_preprocessor)
         self.__update_status('init transformers', 'done')
+
+    def train_models(self):
+        for estimate_manager in [BuiltYearLgbmManager, SqftLgbmEstimateManager, RentLgbmManager, ValueLgbmEstimateManager, SoldPriceLgbmEstimateManager]:
+            em = estimate_manager(self.data_source)
+            em.load_scales()
+            em.train()
+            if em.name not in self.estimate_managers:
+                self.estimate_managers[em.name] = {}
+            self.estimate_managers[em.name][em.model_name] = em
+            logger.info(f"trained {em.name} {em.model_name}")
+            if hasattr(em, 'writeback'):
+                em.writeback()
+                logger.info(f"writeback {em.name} {em.model_name}")
+
+    def save_models(self):
+        for estimate_manager in self.estimate_managers.values():
+            for em in estimate_manager.values():
+                em.save(self.model_store)
 
     def train_writeback_predictors(self):
         """Train predictors."""

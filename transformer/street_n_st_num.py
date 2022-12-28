@@ -6,7 +6,7 @@ from base.base_cfg import BaseCfg
 from base.timer import Timer
 from numpy import NAN
 from sklearn.base import BaseEstimator, TransformerMixin
-from transformer.label_map import getLevel
+from transformer.const_label_map import getLevel
 
 logger = BaseCfg.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class StNumStTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
         self._target_col = 'st_num-st-n'
 
-    def target_cols(self):
+    def get_feature_names_out(self):
         return [self._target_col]
 
     def fit(self, X, y=None):

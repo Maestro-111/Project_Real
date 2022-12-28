@@ -7,14 +7,15 @@ from base.base_cfg import BaseCfg
 from base.timer import Timer
 from base.util import dateFromNum
 from sklearn.base import BaseEstimator, TransformerMixin
-from transformer.label_map import getLevel
+from transformer.const_label_map import getLevel
 
 logger = BaseCfg.getLogger(__name__)
 DATE_20000101 = datetime.datetime(2000, 1, 1, 0, 0)
 
 
 class DatesTransformer(BaseEstimator, TransformerMixin):
-    """bths transformer.
+    """Dates transformer.
+    Transform dates to numeric values.
 
     Parameters
     ----------
@@ -22,27 +23,46 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
     """
     maxLevel = 3
 
-    def __init__(self, cols):
+    def __init__(
+        self,
+        cols
+    ):
+        self.cols = cols
+
+    def get_feature_names_out(self, cols: list[str] = None):
+
+        if hasattr(self, '_target_cols') and self._target_cols is not None:
+            return self._target_cols
+
         self._target_cols = [
-            'onD_2k_n',
-            'onD_year_n',
-            'onD_month_n',
-            'onD_week_n'
+            'onD-2k-n',
+            'onD-year-n',
+            'onD-month-n',
+            'onD-week-n'
+            'onD-season-n',
+            'onD-dayOfWeek-n',
+            'onD-dayOfMonth-n',
+            'onD-dayOfYear-n',
         ]
+        if cols is None:
+            cols = self.cols
         if 'offD' in cols:
             self.offD = True
-            self._target_cols.append('offD_2k_n')
-            self._target_cols.append('dom_n')
+            self._target_cols.append('offD-2k-n')
+            self._target_cols.append('dom-n')
         else:
             self.offD = False
         if 'sldd' in cols:
             self.sldd = True
-            self._target_cols.append('sldd_n')
+            self._target_cols.append('sldd-n')
         else:
             self.sldd = False
-
-    def target_cols(self):
         return self._target_cols
+
+    def set_params(self, **params):
+        ret = super().set_params(**params)
+        self._target_cols = None
+        return ret
 
     def fit(self, X, y=None):
         """Fit the model according to the given training data.
@@ -61,6 +81,8 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
             Returns self.
         """
         logger.debug(f'fit dates')
+
+        self.get_feature_names_out()
         if 'sldd' in X.columns:
             self.sldd = True
         if 'offD' in X.columns:
@@ -81,26 +103,30 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
             The transformed data.
         """
         logger.debug(f'transform dates')
-        timer = Timer('bths', logger)
+        timer = Timer(self.__class__.__name__, logger)
         nanCount = 0
         offDNanCount = 0
         totalCount = 0
-        for col in self.target_cols():
+        for col in self.get_feature_names_out():
             X[col] = None
         for i, row in X.iterrows():
             totalCount += 1
             onD = dateFromNum(row['onD'])
             if onD is not None:
-                X.loc[i, 'onD_2k_n'] = abs((onD - DATE_20000101).days)
-                X.loc[i, 'onD_year_n'] = onD.year
-                X.loc[i, 'onD_month_n'] = onD.month
-                X.loc[i, 'onD_week_n'] = onD.isocalendar().week
+                X.loc[i, 'onD-2k-n'] = abs((onD - DATE_20000101).days)
+                X.loc[i, 'onD-year-n'] = onD.year
+                X.loc[i, 'onD-month-n'] = onD.month
+                X.loc[i, 'onD-week-n'] = onD.isocalendar().week
+                X.loc[i, 'onD-season-n'] = onD.month // 3
+                X.loc[i, 'onD-dayOfWeek-n'] = onD.weekday()
+                X.loc[i, 'onD-dayOfMonth-n'] = onD.day
+                X.loc[i, 'onD-dayOfYear-n'] = onD.timetuple().tm_yday
                 if self.offD:
                     offD = dateFromNum(row['offD'])
                     if offD is not None:
-                        X.loc[i, 'offD_2k_n'] = abs(
+                        X.loc[i, 'offD-2k-n'] = abs(
                             (offD - DATE_20000101).days)
-                        X.loc[i, 'dom_n'] = abs((offD - onD).days)
+                        X.loc[i, 'dom-n'] = abs((offD - onD).days)
                     else:
                         offDNanCount += 1
             else:
@@ -108,7 +134,7 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
             if self.sldd:
                 sldd = dateFromNum(row['sldd'])
                 if sldd is not None:
-                    X.loc[i, 'sldd_n'] = abs((sldd - DATE_20000101).days)
+                    X.loc[i, 'sldd-n'] = abs((sldd - DATE_20000101).days)
         if nanCount > 0:
             logger.warn(f'onD is None: {nanCount}/{totalCount}')
         if offDNanCount > 0:

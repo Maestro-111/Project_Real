@@ -3,6 +3,7 @@ from math import isnan
 from base.base_cfg import BaseCfg
 
 from base.timer import Timer
+from base.util import isNanOrNone
 from numpy import nan
 from sklearn.base import BaseEstimator, TransformerMixin
 from transformer.db_label import DbLabelTransformer
@@ -11,14 +12,23 @@ from base.const import SAVE_LABEL_TO_DB, Mode
 logger = BaseCfg.getLogger(__name__)
 
 
-class OneHotArrayEncodingTransformer(DbLabelTransformer):
+class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
     """One hot encoding for field of string array.
 
     Parameters
     ----------
-    col: str: the source column
-    map: dict: the mapping from string to new feature string
-
+    col: str
+        the source column
+    map: dict
+        the mapping from original string to new feature string. It may be an N to 1 mapping.
+    collection : mongodb collection or None
+        The mongodb collection to save the mapping to. When a collection name is provided, transformer will generate a category column ended -c.
+    col: str
+        The feature name to save the mapping as.
+    mode: Mode
+        The mode of the transformer. PREDICT or TRAIN.
+    na_value: str
+        The value to fill the empty fields with.
     """
 
     def __init__(
@@ -31,39 +41,56 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
         na_value=None,
         save_to_db: bool = SAVE_LABEL_TO_DB,
     ):
-        if collection is not None:
-            super().__init__(collection, col, mode, na_value, save_to_db)
-            self.col_category = self.col+'-c'
-            # logger.info(
-            #     f'init OneHotArrayEncodingTransformer with collection {self.col_category}')
-        else:
-            super().__init__(None, col, mode, na_value, save_to_db)
-            self.col_category = None
-        self.col = col
+        super().__init__(collection, col, mode, na_value, save_to_db)
         self.sufix = sufix
-        self._errors = {}
-        self.map = {}
-        if map is not None:
-            for (x, y) in map.items():
-                if isinstance(y, list):
-                    for v in y:
-                        self.map[x] = v+sufix
-                elif isinstance(y, str):
-                    self.map[x] = y+sufix
-                else:
-                    raise ValueError(f'{y} is not a string or list')
+        self.map = map
 
-    def target_cols(self):
+    def get_feature_names_out(self):
+        if hasattr(self, '_target_cols') and self._target_cols is not None:
+            return self._target_cols
         retSet = set()
+        # category column
+        if self.collection is None:
+            self.col_category = None
+        else:
+            logger.debug(f'fit {self.col} save label to db')
+            self.col_category = self.col+'-c'
         if self.col_category is not None:
             retSet.add(self.col_category)
-        for v in self.map.values():
+        # feature columns
+        if self.map is not None:
+            self.map_ = {}
+            for (x, y) in self.map.items():
+                if isinstance(y, list):
+                    for v in y:
+                        self.map_[x] = self._new_col_name(v)
+                elif isinstance(y, str):
+                    self.map_[x] = self._new_col_name(y)
+                else:
+                    raise ValueError(f'{y} is not a string or list')
+        if getattr(self, 'map_') is None:
+            raise ValueError('map is not set')
+        for v in self.map_.values():
             if isinstance(v, list):
                 for vv in v:
-                    retSet.add(self.col+'-'+vv)
+                    # retSet.add(self.col+'-'+vv)
+                    retSet.add(vv)
             elif isinstance(v, str):
-                retSet.add(self.col+'-'+v)
-        return retSet
+                # retSet.add(self.col+'-'+v)
+                retSet.add(v)
+        self._target_cols = list(retSet)
+        return self._target_cols
+
+    def set_params(self, **params):
+        ret = super().set_params(**params)
+        self._target_cols = None
+        return ret
+
+    def _new_col_name(self, col_name):
+        if col_name.startswith(self.col):
+            return col_name + self.sufix
+        else:
+            return self.col + '-' + col_name + self.sufix
 
     def fit(self, X, y=None):
         """Fit the model according to the given training data.
@@ -82,21 +109,23 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
             Returns self.
         """
         logger.debug(f'fit {self.col}')
+        self._errors = {}
+
         if self.map is None:
             logger.debug(f'fit {self.col} build map')
             col_index = X[self.col].value_counts().index
             col_values = [v + self.sufix for v in col_index]
-            self.map = dict(zip(col_index, col_values))
-            super().fit(X, y)
-        elif self.col_category is not None:  # save map values to db
-            logger.debug(f'fit {self.col} save label to db')
-            Xs = X[self.col].apply(lambda x: self.map.get(x, x))
+            self.map_ = dict(zip(col_index, col_values))
+
+        if self.collection is not None:
+            Xs = X[self.col].apply(lambda x: self.map_.get(x, x))
             super().fit(Xs, y)
             # print('self getattr labels-', getattr(self, 'labels-', 'None'))
             # print(f'self.col {self.col} in self.labels-',
             #       (self.col not in self.labels_))
 
-        self.n_col_ = len(self.target_cols())
+        self._target_cols = None
+        self.n_cols_ = len(self.get_feature_names_out())
         return self
 
     def transform(self, X):
@@ -118,20 +147,22 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
         str_value_count = 0
         error_count = 0
         default_col_name = self.map.get('-', None)
-        new_cols = self.target_cols()
+        new_cols = self.get_feature_names_out()
         for col in new_cols:
             if col not in X.columns:
                 X[col] = 0
 
         def _set_value(value, i):
             nonlocal error_count
-            col_name = self.map.get(value, default_col_name)
+            col_name = self.map_.get(value, default_col_name)
             if isinstance(col_name, list):
-                for v in col_name:
-                    X.loc[i, (self.col+'-'+v)] = 1
+                for col_name_item in col_name:
+                    #X.loc[i, (self.col+'-'+col_name_item)] = 1
+                    X.loc[i, col_name_item] = 1
             elif isinstance(col_name, str):
-                X.loc[i, (self.col+'-'+col_name)] = 1
-            elif value is None or (value == 'nan') or (value == '') or isnan(value):
+                #X.loc[i, (self.col+'-'+col_name)] = 1
+                X.loc[i, col_name] = 1
+            elif isNanOrNone(value):
                 pass
             else:
                 error_count += 1
@@ -141,17 +172,21 @@ class OneHotArrayEncodingTransformer(DbLabelTransformer):
                 self._errors[value] = 1
                 logger.error(f'{self.col} {value} {type(value)} not in map')
 
+        # set value column(s)
         for i, row in X.iterrows():
             value = row[self.col]
-            if (value is None) or (value is nan):
-                continue
             if isinstance(value, list):
                 for v in value:
                     _set_value(v, i)
                     list_value_count += 1
-            else:
+            elif isinstance(value, str):
                 _set_value(value, i)
                 str_value_count += 1
+            elif isNanOrNone(value):
+                continue
+            else:
+                logger.error(f'{self.col} {value} {type(value)} not in map')
+                error_count += 1
 
         # set category column
         if self.col_category is not None:

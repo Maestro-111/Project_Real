@@ -18,19 +18,17 @@ from base.base_cfg import BaseCfg
 from base.const import NONE, RENT_PRICE_UPPER_LIMIT, SALE_PRICE_LOWER_LIMIT, UNKNOWN, DROP, MEAN, Mode
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
-from prop.estimate_scale import PropertyType, PropertyTypeRegexp
+from data.estimate_scale import PropertyType, PropertyTypeRegexp
 from transformer.binary import BinaryTransformer
 from transformer.baths import BthsTransformer
 from transformer.bedrooms import RmsTransformer
 from transformer.dates import DatesTransformer
-from transformer.one_hot_array import OneHotArrayEncodingTransformer
+from transformer.db_one_hot_array import DbOneHotArrayEncodingTransformer
 from transformer.select_col import SelectColumnTransformer
 from transformer.db_label import DbLabelTransformer
 from transformer.db_numeric import DbNumericTransformer
 from transformer.drop_row import DropRowTransformer
-from transformer.row_func import RowFuncTransformer
-from transformer.simple_column import SimpleColumnTransformer
-from transformer.label_map import getLevel, levelType, acType, \
+from transformer.const_label_map import getLevel, levelType, acType, \
     bsmtType, featType, constrType, garageType, lockerType, \
     heatType, fuelType, exposureType, laundryType, \
     parkingDesignationType, parkingFacilityType, balconyType, \
@@ -171,7 +169,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
     -. convert binary saletp to 0 or 1, column name as 'saletp-b'
     -. convert ptype2 to single value. column name as 'ptype2-l'
     -. convert binary cols. column name as '-b'
-    -. convert categorical columns to integers. column name as '-n'
+    -. convert categorical columns to integers. column name as '-c'
     -. fill numeric columns to default values. column name as '-n'
     -. filter lat/lng to the range of [-180, 180] and drop null rows.
     """
@@ -243,58 +241,83 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         # 'onD':      {'na': DROP},
         # 'offD':     {'na': 0},
     }
+
+    # ----- Special cases: Done ---------
+    cols_todo: dict = {
+        'ptype':    {'na': 'r'},
+    }
+
+    # Done.
     cols_special: dict = {
         'lp':       {'na': DROP},
         'lpr':      {'na': DROP},
         'sp':       {'na': DROP},
         # extract number parts from street number
-        'st_num':   {'to': 'st_num-n'},
-        'sqft':     {'to': 'sqft-n'},  # from sqft or rmSqft or sqft estimator
+        'st_num':   {'to': 'st_num-n'},  # Done.
+        'sqft':     {'to': 'sqft-n'},  # Done.
         'rmSqft':   {'to': 'sqft-n'},  # rmSqft or sqft estimator
         # from bltYr or rmBltYr or bltYr estimator
-        'bltYr':    {'to': 'built_yr-n'},
+        'bltYr':    {'to': 'built_yr-n'},  # Done.
         'rmBltYr':  {'to': 'built_yr-n'},  # rmBltYr or bltYr estimator
-        'ptype2':   {'to': 'ptype2-l'},  # ptype2
+        'ptype2':   {'to': 'ptype2-l'},  # ptype2. Done
         'ac':       {'to': 'ac-n'},  # ac
-        'laundry_lev': {'na': NONE},
-        'pets':     {'na': UNKNOWN},
+        'balcony':  {'to': 'balcony-n'},  # Done
+        'laundry_lev': {'na': NONE},  # Done
+        'pets':     {'na': UNKNOWN},  # Done
     }
 
-    cols_todo: dict = {
-        'ptype':    {'na': 'r'},
-    }
-
-    cols_structured: list[str] = [
+    # Done
+    cols_structured_todo: list[str] = [
         'rms',  # get primary bedroom dimensions and area, sum of all bedrooms deminsions, sum of all bedrooms area
         'bths',  # get bath numbers on each level => l0-l3 * number of bathrooms; l0-l3 * pices total
     ]
 
-    # -------------------------------------------------------------------------
     cols_forsale_in_models: dict = {
-        'tax':      {'na': MEAN},
+        'tax':      {'na': MEAN},  # Done
         # the first half year counted as previous tax year
+        # Done
         'taxyr':    {'na': lambda row: yearOfByField(row, 'onD', -183)},
     }
     cols_forsale_house_in_models: dict = {
         # MEAN of all depths when Detached/Semi-Detached/Freehold Townhouse
-        'depth':    {'na': MEAN},
+        'depth':    {'na': MEAN},  # Done
         # MEAN of all flt when Detached/Semi-Detached/Freehold Townhouse
-        'flt':      {'na': MEAN},
+        'flt':      {'na': MEAN},  # Done
     }
-    cols_not_used: list[str] = [  # TODO
+    cols_not_used: list[str] = [
         'la',  # la id : la.agnt[].id
         'la2',  # la2 id: la2.agnt[].id
         'schools',  # get 3 school names and ratings, rankings
     ]
-    cols_condo: list[str] = [  # TODO
+    cols_condo: list[str] = [
         'unt'  # unit storey, total storey, percentage of total storey
     ]
 
-    def __init__(self, mode: Mode = Mode.PREDICT, collection_prefix: str = 'ml_'):
+    def __init__(
+        self,
+        mode: Mode = Mode.PREDICT,
+        collection_prefix: str = 'ml_'
+    ):
         self.mode: Mode = mode
         self.collection_prefix: str = collection_prefix
-        self.label_collection = self.collection_prefix + 'label'
-        self.number_collection = self.collection_prefix + 'number'
+
+    def get_feature_columns(
+        self,
+        all_cols: list[str] = None,
+    ) -> list[str]:
+        """Get the feature columns for the model.
+
+        Returns
+        -------
+        list[str]
+            feature columns
+        """
+        if all_cols is None:
+            if not hasattr(self.customTransformer) or self.customTransformer is None:
+                raise ValueError('No transformer built yet')
+        else:
+            self.build_transformer(all_cols)
+        return self.customTransformer.get_feature_names()
 
     def build_transformer(self, all_cols):
         """Build the transformers for baseline transforming.
@@ -320,7 +343,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
             datesTransformer = DatesTransformer(all_cols)
             colTransformerParams.append(
                 ('onD', datesTransformer))
-            all_cols.extend(datesTransformer.target_cols())
+            all_cols.extend(datesTransformer.get_feature_names_out())
         if 'pets' in all_cols:
             colTransformerParams.append(('pets', petsRow, 'pets', 'pets-n'))
         if 'laundry_lev' in all_cols:
@@ -353,7 +376,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         for k, v in self.cols_array_label.items():
             if k in all_cols:
                 if v['strType']:
-                    transformer = OneHotArrayEncodingTransformer(
+                    transformer = DbOneHotArrayEncodingTransformer(
                         col=k,
                         map=v['map'],
                         sufix='-b',
@@ -362,10 +385,10 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                         na_value=None,
                     )
                 else:
-                    transformer = OneHotArrayEncodingTransformer(
+                    transformer = DbOneHotArrayEncodingTransformer(
                         k, v['map'], '-b')
                 colTransformerParams.append((f'{k}_x', transformer))
-                all_cols.extend(transformer.target_cols())
+                all_cols.extend(transformer.get_feature_names_out())
         # binary columns
         for k, v in self.cols_binary.items():
             if k in all_cols:
@@ -396,7 +419,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
             stNumStTransformer = StNumStTransformer()
             colTransformerParams.append(
                 ('st_num-st', stNumStTransformer))
-            all_cols.extend(stNumStTransformer.target_cols())
+            all_cols.extend(stNumStTransformer.get_feature_names_out())
         # rms and bths
         if 'rms' in all_cols:
             colTransformerParams.append(('rms', RmsTransformer()))
@@ -419,6 +442,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         # create the pipeline
         self.customTransformer = SimpleColumnTransformer(
             colTransformerParams)
+        return self.customTransformer
 
     def fit(self, Xdf: pd.DataFrame, y=None):
         """A reference implementation of a fitting function for a transformer.
@@ -434,6 +458,9 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         self : object
             Returns self.
         """
+        self.label_collection = self.collection_prefix + 'label'
+        self.number_collection = self.collection_prefix + 'number'
+
         self.build_transformer(Xdf.columns)
         self.customTransformer.fit(Xdf, y)
         self.n_features_ = Xdf.shape[1]
@@ -451,9 +478,9 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         if self.n_features_ is None:
             raise ValueError('The transformer has not been fitted yet.')
 
-        if self.customTransformer is None:
-            self.build_transformer(Xdf.columns)
-            self.customTransformer.fit(Xdf)
+        # if self.customTransformer is None:
+        #     self.build_transformer(Xdf.columns)
+        #     self.customTransformer.fit(Xdf)
         logger.info('Transforming to baseline format')
         #pd.set_option('mode.chained_assignment', None)
         Xdf = self.customTransformer.transform(Xdf)

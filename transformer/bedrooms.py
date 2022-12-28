@@ -5,17 +5,18 @@ import pandas as pd
 from base.base_cfg import BaseCfg
 from base.timer import Timer
 from sklearn.base import BaseEstimator, TransformerMixin
-from transformer.label_map import getLevel
+from transformer.const_label_map import getLevel
 
 logger = BaseCfg.getLogger(__name__)
 
 
 class RmsTransformer(BaseEstimator, TransformerMixin):
     """rms transformer.
+    transform rms to rms-p_size-n, rms-p_area-n, rms-t_size-n, rms-t_area-n
 
     Parameters
     ----------
-
+    None
     """
     masterReg = re.compile(
         r'^Master$|^Primary$|^Mbr$|^Prim\sBdrm$|^Master\s+B|^Primary\sB|', re.IGNORECASE)
@@ -25,7 +26,7 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
         pass
 
-    def target_cols(self):
+    def get_feature_names_out(self):
         return ['rms-p_size-n', 'rms-p_area-n', 'rms-t_size-n', 'rms-t_area-n']
 
     def fit(self, X, y=None):
@@ -65,7 +66,7 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
         timer.start()
         nanCount = 0
         totalCount = 0
-        for col in self.target_cols():
+        for col in self.get_feature_names_out():
             X[col] = 0
         for index, rms in X.loc[:, 'rms'].items():
             totalCount += 1

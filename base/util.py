@@ -6,6 +6,8 @@ from math import isnan
 from datetime import datetime, timezone
 UTC_OFFSET_TIMEDELTA = datetime.utcnow() - datetime.now()
 
+logger = BaseCfg.getLogger(__name__)
+
 
 def selectFromTwo(a, b):
     if (a is not None) and (not isnan(a)):
@@ -116,3 +118,45 @@ def dateFromNum(dayNum):
             month = 12
             print(f'month > 12 : {dayNum}')
     return datetime(year, month, day, 0, 0)
+
+
+def dateToNum(date: datetime = datetime.today()):
+    return date.year * 10000 + date.month * 100 + date.day
+
+
+def isNanOrNone(value):
+    if value is None:
+        return True
+    if (value == 'nan') or (value == ''):
+        return True
+    if isnan(value):
+        return True
+    return False
+
+
+def getUniqueLabels(X: pd.Series) -> list:
+    return X.unique().tolist()
+
+
+def printColums(df, start: str = None):
+    cols = []
+    for c in df.columns:
+        if start is not None:
+            if c.startswith(start):
+                cols.append(c)
+        else:
+            cols.append(c)
+    cols.sort()
+    for c in cols:
+        print(c)
+
+
+def debug(fn):
+    def wrapper(*args, **kwargs):
+        logger.debug(f"Invoking {fn.__name__}")
+        logger.debug(f"  args: {args}")
+        logger.debug(f"  kwargs: {kwargs}")
+        result = fn(*args, **kwargs)
+        logger.debug(f"  returned {result}")
+        return result
+    return wrapper

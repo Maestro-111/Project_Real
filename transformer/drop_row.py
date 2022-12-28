@@ -12,26 +12,42 @@ logger = BaseCfg.getLogger(__name__)
 
 class DropRowTransformer(BaseEstimator, TransformerMixin):
     """Drop rows with missing values.
+    Parameters
+    ----------
+    drop_cols : drop rows with missing values in these columns
+    drop_func : drop rows when this function returns True. The function will be passed a row.
+    mode: Mode
+        The mode of the transformer. PREDICT or TRAIN.
+    as_na_value: str
+        The value will be treated as missing value.
+    columns: list
+    inplace: bool
+        If True, do operation inplace.
     """
 
-    def __init__(self,
-                 drop_cols: list[str] = None,
-                 drop_func: (any) = None,
-                 mode: Mode = Mode.TRAIN,
-                 as_na_value=None,
-                 columns=None,
-                 inplace=True):
+    def __init__(
+        self,
+        drop_cols: list[str] = None,
+        drop_func: (any) = None,
+        mode: Mode = Mode.TRAIN,
+        as_na_value=None,
+        columns=None,
+        inplace=True
+    ):
         self.drop_cols = drop_cols
         self.drop_func = drop_func
         self.mode = mode
         self.as_na_value = as_na_value
         self.columns = columns
         self.inplace = inplace
-        if self.drop_cols is None and self.drop_func is None:
-            raise ValueError('Either drop_cols or drop_func must be specified')
+
+    def get_feature_names(self):
+        return self.columns
 
     def fit(self, X, y=None):
         logger.debug('drop_na.fit')
+        if self.drop_cols is None and self.drop_func is None:
+            raise ValueError('Either drop_cols or drop_func must be specified')
         return self
 
     def transform(self, X):

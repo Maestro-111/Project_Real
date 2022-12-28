@@ -11,19 +11,31 @@ class SelectColumnTransformer(TransformerMixin, BaseEstimator):
 
     Parameters
     ----------
-    col: str : the target column name
-    columns: list of strings of two or more: The columns to be selected.
-    type: default int. The type of filter.
+    col: str
+        the target column name
+    columns: list[str] of strings of two or more
+        The columns to be selected.
+    type: default int. 
+        The type of filter.
 
     Attributes
     ----------
     """
 
-    def __init__(self, new_col: str, columns: list[str], func: (any), as_na_value=None):
+    def __init__(
+        self,
+        new_col: str,
+        columns: list[str],
+        func: (any),
+        as_na_value=None
+    ):
         self.new_col = new_col
         self.columns = columns
         self.func = func
         self.as_na_value = as_na_value
+
+    def get_feature_names_out(self):
+        return [self.new_col]
 
     def fit(self, X, y=None):
         """Fit the model according to the given training data.

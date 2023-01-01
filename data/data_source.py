@@ -6,38 +6,62 @@ from numpy import NaN
 from predictor.writeback_mixin import WriteBackMixin
 from data.estimate_scale import EstimateScale
 from base.mongo import MongoDB
-from base.util import debug, get_utc_datetime_from_str, getUniqueLabels, print_dateframe
+from base.util import debug, get_utc_datetime_from_str, getUniqueLabels, isNanOrNone, print_dateframe
 from datetime import datetime, timedelta
 import pandas as pd
 from transformer.preprocessor import Preprocessor
 from typing import Union
 import os
+from base.const import CITY_COUNT_THRESHOLD
 
 logger = BaseCfg.getLogger(__name__)
 
 PROV_CITY_TO_AREA = {}
+PROV_CITY_TO_AREA_COUNT = {}
+PROV_CITY_TO_AREA_DF = None
 PROV_CITY_TO_AREA_FILE = 'data/prov_city_to_area.csv'
+gEmptyAreaCount = 0
 
 
 def readProvCityToArea():
     """Read province-city to area mapping from csv file"""
-    global PROV_CITY_TO_AREA
+    global PROV_CITY_TO_AREA, PROV_CITY_TO_AREA_COUNT
     # check file exists
     if not (os.path.exists(PROV_CITY_TO_AREA_FILE) and os.path.isfile(PROV_CITY_TO_AREA_FILE)):
         return
     df = pd.read_csv(PROV_CITY_TO_AREA_FILE)
     for index, row in df.iterrows():
-        PROV_CITY_TO_AREA[(row['province'], row['city'])] = row['area']
+        PROV_CITY_TO_AREA[(row['prov'], row['city'])] = row['area']
+        PROV_CITY_TO_AREA_COUNT[(row['prov'], row['city'])] = row['count']
+
 
 readProvCityToArea()
 
-def writeProvCityToArea():
+
+def calcProvCityToAreaDF(write_to_file: bool = False):
     """Write province-city to area mapping to csv file"""
-    df = pd.DataFrame(columns=['province', 'city', 'area'])
+    global PROV_CITY_TO_AREA, PROV_CITY_TO_AREA_COUNT, PROV_CITY_TO_AREA_DF, CITY_COUNT_THRESHOLD
+    rows = []
     for key, value in PROV_CITY_TO_AREA.items():
-        df = df.append(
-            {'province': key[0], 'city': key[1], 'area': value}, ignore_index=True)
-    df.to_csv(PROV_CITY_TO_AREA_FILE, index=False)
+        if PROV_CITY_TO_AREA_COUNT[key] > CITY_COUNT_THRESHOLD:
+            rows.append({'prov': key[0], 'city': key[1],
+                         'area': value, 'count': PROV_CITY_TO_AREA_COUNT[key]})
+    PROV_CITY_TO_AREA_DF = pd.DataFrame.from_records(rows)
+    PROV_CITY_TO_AREA_DF.sort_values(
+        by=['count'], ascending=False, inplace=True)
+    if write_to_file:
+        PROV_CITY_TO_AREA_DF.to_csv(PROV_CITY_TO_AREA_FILE, index=False)
+    return PROV_CITY_TO_AREA_DF
+
+
+def fill_row_area(row):
+    """Fill area from PROV_CITY_TO_AREA dict"""
+    global PROV_CITY_TO_AREA, gEmptyAreaCount
+    if isNanOrNone(row['area']) and row['city'] != '':
+        gEmptyAreaCount += 1
+        return PROV_CITY_TO_AREA.get((row['prov'], row['city']), '')
+    else:
+        return row['area']
 
 
 def dateToInt(date):
@@ -142,7 +166,7 @@ class DataSource:
 
     def __init__(
         self,
-        scale: EstimateScale,
+        scale: Union[EstimateScale, list[EstimateScale]],
         query: dict = None,
         col_list: list[str] = None
     ):
@@ -154,7 +178,14 @@ class DataSource:
         self.df_raw = None
         self.df_transformed = None
         self.df_grouped = None
-        self._query = {**query, **self.scale.get_query()}
+        if isinstance(scale, list):
+            # or condition for scale tuple
+            or_query = []
+            for s in scale:
+                or_query.append(s.get_query())
+            self._query = {**query, '$or': or_query}
+        else:
+            self._query = {**query, **self.scale.get_query()}
 
     def __str__(self):
         return f'DataSource: {self._query}'
@@ -164,14 +195,41 @@ class DataSource:
         self.df_raw = read_data_by_query(
             self._query, self.col_list)
         self._build_prov_city_to_area()
+        self._fill_df_raw_area()
+        self._build_prov_city_to_area(True)  # rebuild map and write to file
         self._build_scale_tree()
 
-    def _build_prov_city_to_area(self):
+    def _fill_df_raw_area(self):
+        """Fill area column in df_raw"""
+        global PROV_CITY_TO_AREA, gEmptyAreaCount
+        self.df_raw['area'] = self.df_raw.apply(fill_row_area, axis=1)
+        logger.info(f'Empty area rows: {gEmptyAreaCount}')
+
+    def _build_prov_city_to_area(self, write_to_file=False):
         """Build PROV_CITY_TO_AREA dict from df_raw"""
-        global PROV_CITY_TO_AREA
+        global PROV_CITY_TO_AREA, PROV_CITY_TO_AREA_COUNT
+        # reset global dict count to empty
+        PROV_CITY_TO_AREA_COUNT = {}
         for prov, area, city in self.df_raw[['prov', 'area', 'city']].values:
-            PROV_CITY_TO_AREA[(prov, city)] = area
-        writeProvCityToArea()
+            if isinstance(area, str) and area != '' and isinstance(city, str) and city != '' and isinstance(prov, str) and prov != '':
+                if PROV_CITY_TO_AREA_COUNT.get((prov, city), 0) == 0:
+                    PROV_CITY_TO_AREA[(prov, city)] = area
+                    PROV_CITY_TO_AREA_COUNT[(prov, city)] = 1
+                else:
+                    if PROV_CITY_TO_AREA[(prov, city)] != area:
+                        change = False
+                        if PROV_CITY_TO_AREA_COUNT[(prov, city)] < 10:
+                            # change to conflict if conflict count < 10
+                            PROV_CITY_TO_AREA[(prov, city)] = area
+                            change = True
+                        if PROV_CITY_TO_AREA_COUNT[(prov, city)] < 100:
+                            # only log conflict if conflict count < 100
+                            logger.warning(
+                                f'PROV_CITY_TO_AREA conflict: {(prov, city)}: {PROV_CITY_TO_AREA[(prov, city)]} {PROV_CITY_TO_AREA_COUNT[(prov, city)]} vs New:{area}. {"Change to New" if change else "Keep old value"}')
+                    else:
+                        PROV_CITY_TO_AREA[(prov, city)] = area
+                        PROV_CITY_TO_AREA_COUNT[(prov, city)] += 1
+        calcProvCityToAreaDF(write_to_file=write_to_file)
         return PROV_CITY_TO_AREA
 
     def load_df_grouped(
@@ -209,14 +267,29 @@ class DataSource:
         self.df_grouped = pd.concat(
             [self.df_grouped, df_grouped], axis=0)
 
+    def getLeafScales(
+        self,
+        propType: str = None,
+        sale: bool = None,
+    ):
+        if isinstance(self.scale, list):
+            leafScales = []
+            for s in self.scale:
+                leafScales.extend(s.getLeafScales(
+                    propType=propType, sale=sale))
+            return leafScales
+        else:
+            return self.scale.getLeafScales(propType=propType, sale=sale)
+
     def _build_scale_tree(self):
         """Build scale tree from raw data."""
-        provs = self.df_raw['prov'].unique().tolist()
-        areas = self.df_raw['area'].unique().tolist()
-        cities = self.df_raw['city'].unique().tolist()
         logger.debug(
-            f'Build Scale Tree. \n provs: {provs} \n areas: {areas} \n cities: {cities}')
-        self.scale.buildAllSubScales(provs, areas, cities)
+            f'Build Scale Tree.')
+        if isinstance(self.scale, list):
+            for s in self.scale:
+                s.buildAllSubScales(PROV_CITY_TO_AREA_DF)
+        else:
+            self.scale.buildAllSubScales(PROV_CITY_TO_AREA_DF)
 
     def transform_data(self, preprocessor: Preprocessor = None):
         """ Transform data with preprocessor then group them.

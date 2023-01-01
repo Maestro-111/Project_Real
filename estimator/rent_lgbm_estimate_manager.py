@@ -53,8 +53,7 @@ class RentLgbmManager(LgbmEstimateManager):
     def load_scales(self, sale: bool = None) -> None:
         return super().load_scales(sale=False)
 
-    def my_load_data(self, scale: EstimateScale = None) -> pd.DataFrame:
-        scale = scale or self.data_source.scale
+    def my_load_data(self, scale: EstimateScale) -> pd.DataFrame:
         scale = scale.copy(sale=False)
         return self.load_data(
             scale=scale,

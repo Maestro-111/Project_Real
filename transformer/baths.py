@@ -56,7 +56,7 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
             Returns self.
         """
 
-        logger.debug(f'fit rms')
+        #logger.debug(f'fit rms')
         return self
 
     def transform(self, X):
@@ -72,7 +72,7 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
         X_transformed : {array-like, sparse matrix}, shape (n_samples, n_features_)
             The transformed data.
         """
-        logger.debug(f'transform baths')
+        # logger.debug(f'transform baths')
         timer = Timer('bths', logger)
         timer.start()
         nanCount = 0

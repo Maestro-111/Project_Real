@@ -3,15 +3,15 @@ os.environ['DEBUG'] = 'True'
 os.environ["RMBASE_FILE_PYTHON"] = "/Users/fred/work/cfglocal/built/base.py"
 print(os.environ['RMBASE_FILE_PYTHON'])
 
-from math import isnan
-
-from estimator.organizer import Organizer
-from base.timer import Timer
-from helper.feature_select import FeatureSelector
-from base.const import Mode
-import logging
-import pandas as pd
+from data.data_source import read_data_by_query
 import numpy as np
+import pandas as pd
+import logging
+from base.const import Mode
+from helper.feature_select import FeatureSelector
+from base.timer import Timer
+from estimator.organizer import Organizer
+from math import isnan
 
 
 logger = logging.getLogger()
@@ -27,7 +27,23 @@ org.train_models()
 
 org.save_models()
 
-org.predict(['TRBW5841870'])
+df, a_cols = org.predict([
+    'TRBW5841870', 'TRBW5841549', 'TRBW5840562', 'DDF25100869', 'TRBX5810806',  # Mississauga
+    'TRBC5841835', 'TRBC5841873', 'TRBE5841152', 'TRBE5840727', 'TRBC5841124',  # Toronto
+    'TRBN5841327', 'DDF25052539', 'TRBN5841525', 'TRBN5840799', 'TRBN5841438',  # Markham
+    'TRBW5841599', 'TRBW5841869', 'TRBW5841824', 'TRBW5840755', 'TRBW5840758',  # Oakville
+    'TRBW5840555', 'TRBW5841859', 'TRBW5841673', 'TRB40323381', 'TRB40297792',  # Brampton
+])
+a_cols.append('lp-n')
+df[a_cols]
+
+
+df['onD-week-non', 'D-season-n']
+for col in a_cols:
+    if col in df.columns:
+        print(df[col])
+    else:
+        print(f'{col} not found')
 
 # ----------------------------------------------------------
 # start testing below
@@ -45,34 +61,31 @@ sold.train()
 
 # -------------------
 ds = org.data_source
-df = ds.load_df_grouped(['TRBW5841870'],org.root_preprocessor)
-ds.prov_city_to_area = {('ON','Mississauga'):'Peel'}
+df = ds.load_df_grouped(['TRBW5841870'], org.root_preprocessor)
+ds.prov_city_to_area = {('ON', 'Mississauga'): 'Peel'}
 
 df['_id']
 
-from data.data_source import read_data_by_query
-df = read_data_by_query({'_id':{'$in':['TRBW5841870']}}, ds.col_list)
+df = read_data_by_query({'_id': {'$in': ['TRBW5841870']}}, ds.col_list)
 print('prov' in df.columns)
 print(df['prov'])
 
-df.apply(lambda row: print(row['city']) , axis=1)
-df.apply(lambda row: print((row['prov'],row['city'])) , axis=1)
-(df.loc[0,'prov'],df.loc[0,'city'])
-print(ds.prov_city_to_area[(df['prov'],df['city'])])
+df.apply(lambda row: print(row['city']), axis=1)
+df.apply(lambda row: print((row['prov'], row['city'])), axis=1)
+(df.loc[0, 'prov'], df.loc[0, 'city'])
+print(ds.prov_city_to_area[(df['prov'], df['city'])])
 
-trans = org.root_preprocessor.customTransformer.transFunctionsByName_['fce_x'][1]
+trans = org.root_preprocessor.customTransformer.transFunctionsByName_[
+    'fce_x'][1]
 trans.fit(ds.df_raw)
 df_raw = ds.df_raw
-Xs = df_raw['fce'].apply(lambda x: trans.map_.get(x,x))
+Xs = df_raw['fce'].apply(lambda x: trans.map_.get(x, x))
 Xs1 = Xs.explode(ignore_index=False)
 Xs1
 
 col_labels = Xs1.value_counts()
 col_labels.index = col_labels.index.astype(str)
 col_labels = col_labels.sort_values(ascending=False)
-
-
-
 
 
 # test built year
@@ -139,8 +152,8 @@ labels = df1['max_speed'].value_counts()
 labels.index = labels.index.astype(str)
 labels = labels.sort_index()
 
-for i,c in labels.items():
-  print(f'{i}=>{c}')
+for i, c in labels.items():
+    print(f'{i}=>{c}')
 
 tuples = [
     ('cobra', 'mark i'), ('cobra', 'mark ii'),
@@ -229,7 +242,6 @@ org.train_predictors()
 org.data_source.load_data(org.root_preprocessor)
 
 
-
 printColums(data_source.df_grouped)
 
 
@@ -290,3 +302,9 @@ org.init_transformers()
 org.train_predictors()
 
 str(20120312)
+
+
+df = pd.DataFrame({'points': [14, 19, 9, 21, 25, 29, 20, 11],
+                   'assists': [5, 7, 7, 9, 12, 9, 9, 4],
+                   'rebounds': [11, 8, 10, 6, 6, 5, 9, 12]})
+df.mean(axis=0)

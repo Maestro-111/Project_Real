@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from math import isnan
 from base.base_cfg import BaseCfg
 from base.model_store import ModelStore
 from data.data_source import DataSource
@@ -20,7 +21,7 @@ class RmBaseEstimateManager:
     and shall extend this class.
 
     attributes:
-        x_columns: list[str] 
+        x_columns: list[str]
         y_column: str
         date_span: int
         filter_func: pd.Series -> bool
@@ -58,7 +59,7 @@ class RmBaseEstimateManager:
         To support other filters, override this method.
         """
         self.scales = {}
-        for scale in self.data_source.scale.getLeafScales(sale=sale):
+        for scale in self.data_source.getLeafScales(sale=sale):
             self.scales[repr(scale)] = scale
 
     def __model_key__(self) -> str:
@@ -71,6 +72,8 @@ class RmBaseEstimateManager:
         if hasattr(self, 'scale'):
             scale, model, accuracy, x_cols, x_means, meta = self.train_single_scale(
                 scale)
+            if scale is None:
+                return
             model_dict = {
                 'model': model,
                 'accuracy': accuracy,
@@ -83,6 +86,8 @@ class RmBaseEstimateManager:
             for scale in self.scales.values():
                 scale, model, accuracy, x_cols, x_means, meta = self.train_single_scale(
                     scale)
+                if scale is None:
+                    continue
                 model_dict = {
                     'model': model,
                     'accuracy': accuracy,
@@ -142,9 +147,14 @@ class RmBaseEstimateManager:
         filterScale = scale.copy(sale='Both')
         df = self.load_data(df_grouped=df_grouped,
                             scale=filterScale, date_span=-1)
-        if df is None or df.empty or df.shape[0] == 0:
+        if df is None or df.empty:
             return None, None
-        model_dict = scale.meta[self.__model_key__()]
+        key = self.__model_key__()
+        if key not in scale.meta:
+            self.logger.warning(
+                f'No model found for scale {scale}.')
+            return None, None
+        model_dict = scale.meta[key]
         model = model_dict['model']
         x_cols = model_dict['x_cols']
         x_means = model_dict['x_means']
@@ -175,7 +185,10 @@ class RmBaseEstimateManager:
 
     def save_one_model(self, store: ModelStore, scale: EstimateScale) -> None:
         """Save one estimator."""
-        model_dict = scale.meta[self.__model_key__()]
+        model_key = self.__model_key__()
+        if model_key not in scale.meta:
+            return None
+        model_dict = scale.meta[model_key]
         # estimator name, model name, scale, date
         filename = ':'.join([self.name, self.model_name, repr(scale)])
         meta = {
@@ -185,7 +198,7 @@ class RmBaseEstimateManager:
             'feature_importance': model_dict['feature_importance'],
             'ts': datetime.now(),
         }
-        self.logger.info('Saving model: %s', filename)
+        self.logger.info(f'Saving model: {filename} {meta}')
         store.save_model(
             filename, model_dict['model'], model_dict['accuracy'], meta)
 
@@ -248,7 +261,7 @@ class RmBaseEstimateManager:
     ) -> pd.DataFrame:
         """Load the data and set it to self.df.
         Use the default values if not specified:
-        self.x_columns, self.y_column, self.date_span, 
+        self.x_columns, self.y_column, self.date_span,
         self.filter_func, self.suffix_list
         """
         if self.data_source is None:
@@ -311,7 +324,7 @@ class RmBaseEstimateManager:
         x_numeric_columns.remove(y_numeric_column)
         self.logger.info(
             f'*{self.name}* X: {x_numeric_columns} y: {y_numeric_column}')
-        x_means = df[x_numeric_columns].mean()
+        x_means = df[x_numeric_columns].mean().to_dict()
         return x_numeric_columns, y_numeric_column, x_means
 
     def test_accuracy(self, model, X_test, y_test) -> float:
@@ -323,6 +336,7 @@ class RmBaseEstimateManager:
 
     def get_score(self, y_true, y_pred) -> float:
         """Get the accuracy score."""
+        pred_accuracy_score = 0
         if self.model_class == ModelClass.Classification:
             pred_accuracy_score = accuracy_score(y_true, y_pred)
         elif self.model_class is None or self.model_class == ModelClass.Regression:
@@ -331,4 +345,8 @@ class RmBaseEstimateManager:
             self.logger.error(
                 f'Lost model class: {self.model_class} {type(self.model_class)} {self}')
             pred_accuracy_score = r2_score(y_true, y_pred)
+        if isnan(pred_accuracy_score):
+            self.logger.error(
+                f'Accuracy score is nan: {self.model_class} {type(self.model_class)} {len(y_true)}:{len(y_pred)} {self}')
+            pred_accuracy_score = 0
         return pred_accuracy_score

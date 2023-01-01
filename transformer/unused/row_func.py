@@ -22,11 +22,11 @@ class RowFuncTransformer(BaseEstimator, TransformerMixin):
         self.new_col = new_col
 
     def fit(self, X, y=None):
-        logger.debug(f'fit {self.col}')
+        # logger.debug(f'fit {self.col}')
         return self
 
     def transform(self, X):
-        logger.debug('transform {}'.format(target_col))
+        # logger.debug('transform {}'.format(target_col))
         if self.new_col is None:
             target_col = self.col
         else:

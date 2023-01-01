@@ -45,7 +45,7 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
         self : object
             Returns self.
         """
-        logger.debug(f'fit rms')
+        # logger.debug(f'fit rms')
         return self
 
     def transform(self, X):
@@ -61,7 +61,7 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
         X_transformed : {array-like, sparse matrix}, shape (n_samples, n_features_)
             The transformed data.
         """
-        logger.debug(f'transform rms')
+        # logger.debug(f'transform rms')
         timer = Timer('rms', logger)
         timer.start()
         nanCount = 0

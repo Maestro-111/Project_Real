@@ -1,3 +1,4 @@
+import numbers
 import re
 from .base_cfg import BaseCfg
 import pandas as pd
@@ -129,7 +130,7 @@ def isNanOrNone(value):
         return True
     if (value == 'nan') or (value == ''):
         return True
-    if isnan(value):
+    if isinstance(value, numbers.Number) and isnan(value):
         return True
     return False
 
@@ -160,3 +161,7 @@ def debug(fn):
         logger.debug(f"  returned {result}")
         return result
     return wrapper
+
+
+def columnValues(df: pd.DataFrame, col: str) -> list:
+    return df[col].unique().tolist()

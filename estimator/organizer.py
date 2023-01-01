@@ -70,8 +70,8 @@ class Organizer:
             datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
             propType=None,  # PropertyType.DETACHED,
             prov='ON',
-            area='Peel',
-            city='Mississauga',
+            area=None,
+            city=None,
             sale=None,
         )
         self.default_sale_scale = EstimateScale(
@@ -120,6 +120,11 @@ class Organizer:
             # '_id': {'$in': ['TRBW474049', 'TRBW4874697']},
             'onD': {'$gt': DEFAULT_START_DATA_DATE},
         }
+        scales = []
+        # area search does not work well, since many records have no area
+        # for area in ['York', 'Peel', 'Toronto', 'Durham']:
+        #     # ,'Hamilton','Waterloo','Niagara','Ottawa']:
+        #     scales.append(self.default_all_scale.copy(area=area))
         self.data_source = DataSource(
             scale=self.default_all_scale,
             query=query)

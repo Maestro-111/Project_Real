@@ -41,18 +41,18 @@ class DropRowTransformer(BaseEstimator, TransformerMixin):
         return self.columns
 
     def fit(self, X, y=None):
-        logger.debug('drop_na.fit')
+        # logger.debug('drop_na.fit')
         if self.drop_cols is None and self.drop_func is None:
             raise ValueError('Either drop_cols or drop_func must be specified')
         return self
 
     def transform(self, X):
-        logger.debug('drop_na.transform {}'.format(self.drop_cols))
+        # logger.debug('drop_na.transform {}'.format(self.drop_cols))
         if isinstance(X, np.ndarray):
             X = pd.DataFrame(X, columns=self.columns)
             logger.info('converted np.ndarray to pd.DataFrame')
         original_rows = X.shape[0]
-        logger.debug(f'{self.drop_cols} before {original_rows} rows')
+        # logger.debug(f'{self.drop_cols} before {original_rows} rows')
         retX = None
         if self.drop_cols is not None:
             if self.as_na_value is None:
@@ -67,6 +67,6 @@ class DropRowTransformer(BaseEstimator, TransformerMixin):
         else:
             raise ValueError('Either drop_cols or drop_func must be specified')
         after_drop_rows = retX.shape[0]
-        logger.debug(
-            f'{self.drop_cols} after {after_drop_rows}/{original_rows} dropped rows{original_rows - after_drop_rows}')
+        # logger.debug(
+        #    f'{self.drop_cols} after {after_drop_rows}/{original_rows} dropped rows{original_rows - after_drop_rows}')
         return retX

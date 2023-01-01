@@ -66,7 +66,7 @@ class BinaryTransformer(TransformerMixin, BaseEstimator):
         if not isinstance(self.map, list) or len(self.map) != 2:
             raise ValueError(
                 f'The map must be a list of two values, got {self.map}')
-        logger.debug(f'binary.fit {self.col}')
+        # logger.debug(f'binary.fit {self.col}')
         self.n_values_ = len(X.value_counts())
         return self
 
@@ -83,7 +83,7 @@ class BinaryTransformer(TransformerMixin, BaseEstimator):
         X_transformed : {array-like, sparse matrix}, shape (n_samples, n_features_)
             The transformed data.
         """
-        logger.debug(f'binary.transform {self.col}')
+        # logger.debug(f'binary.transform {self.col}')
         if isinstance(self.map, list):
             X = [1 if x == self.map[1] else 0 for x in X]
         else:

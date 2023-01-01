@@ -101,7 +101,7 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         self : object
             Returns self.
         """
-        logger.debug(f'number {self.col} fit')
+        # logger.debug(f'number {self.col} fit')
         # X = check_array(X, accept_sparse=True)
 
         # self.n_features_ = X.shape[1]
@@ -157,7 +157,7 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
 
         # we may need to use a wrapper here
         # X = pd.DataFrame(X)
-        logger.debug(f'number {self.col} transform')
+        # logger.debug(f'number {self.col} transform')
         if isinstance(self.na_value, str):
             if self.na_value == DROP:
                 na_value = np.nan

@@ -80,7 +80,7 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
         self : object
             Returns self.
         """
-        logger.debug(f'fit dates')
+        # logger.debug(f'fit dates')
 
         self.get_feature_names_out()
         if 'sldd' in X.columns:
@@ -102,7 +102,7 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
         X_transformed : {array-like, sparse matrix}, shape (n_samples, n_features_)
             The transformed data.
         """
-        logger.debug(f'transform dates')
+        # logger.debug(f'transform dates')
         timer = Timer(self.__class__.__name__, logger)
         nanCount = 0
         offDNanCount = 0

@@ -126,15 +126,15 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         self : object
             Returns self.
         """
-        logger.debug(
-            f'label {self.col} fit')
+        # logger.debug(
+        #    f'label {self.col} fit')
         # X = check_array(X, accept_sparse=True)
 
         # self.n_features_ = X.shape[1]
 
         t = Timer(self.col, logger)
 
-        #logger.debug(f'set self.labels_ {self.col}')
+        # logger.debug(f'set self.labels_ {self.col}')
         self.labels_ = {}
         self.labels_count_ = {}
         self.labels_index_ = {}
@@ -195,7 +195,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         #                      'in `fit`')
         # we may need to use a wrapper here
         # X = pd.DataFrame(X)
-        logger.debug(f'label {self.col} transform')
+        # logger.debug(f'label {self.col} transform')
         # fill na_value
         if self.na_value is not None:
             X.fillna(value=self.na_value, inplace=True)
@@ -206,6 +206,8 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
             if label is None:
                 return None
             if isinstance(label, list):  # when label is a list
+                if len(label) == 0:
+                    return None
                 return max([map_value(l, self) for l in label])
             index = self.labels_.get(label, None)
             if isinstance(index, int):

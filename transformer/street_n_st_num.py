@@ -42,7 +42,7 @@ class StNumStTransformer(BaseEstimator, TransformerMixin):
         self : object
             Returns self.
         """
-        logger.debug(f'fit st_num-st')
+        # logger.debug(f'fit st_num-st')
         return self
 
     def transform(self, X):
@@ -58,7 +58,7 @@ class StNumStTransformer(BaseEstimator, TransformerMixin):
         X_transformed : {array-like, sparse matrix}, shape (n_samples, n_features_)
             The transformed data.
         """
-        logger.debug(f'transform st_num-st')
+        # logger.debug(f'transform st_num-st')
         timer = Timer('st_num-st', logger)
         nanCount = 0
         totalCount = 0

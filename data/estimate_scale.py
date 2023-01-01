@@ -4,6 +4,8 @@ from enum import Enum
 import re
 from typing import Union
 from base.base_cfg import BaseCfg
+import pandas as pd
+from base.util import columnValues
 
 from regex import F, P
 from sympy import Q
@@ -86,7 +88,7 @@ class EstimateScale:
             area = None
         if city == '-':
             city = None
-        if sale == 'BothSaleRent' or sale == '-' or sale == 'Both':
+        if (sale == 'BothSaleRent') or (sale == '-') or (sale == 'Both'):
             sale = None
         elif sale == 'Sale' or sale == 'S':
             sale = True
@@ -103,9 +105,7 @@ class EstimateScale:
 
     def getSubScales(
         self,
-        provs: list = None,
-        areas: list = None,
-        cities: list = None,
+        df_prov_area_city: pd.DataFrame = None,
     ) -> list:
         if hasattr(self, 'subScales'):
             return self.subScales
@@ -113,14 +113,14 @@ class EstimateScale:
         if self.propType is None:
             for propType in [PropertyType.DETACHED, PropertyType.SEMI_DETACHED, PropertyType.TOWNHOUSE, PropertyType.CONDO]:
                 self.subScales.append(self.copy(propType=propType))
-        elif self.prov is None and provs is not None:
-            for prov in provs:
+        elif self.prov is None and df_prov_area_city is not None:
+            for prov in columnValues(df_prov_area_city, 'prov'):
                 self.subScales.append(self.copy(prov=prov))
-        elif self.area is None and areas is not None:
-            for area in areas:
+        elif self.area is None and df_prov_area_city is not None:
+            for area in columnValues(df_prov_area_city[df_prov_area_city['prov'] == self.prov], 'area'):
                 self.subScales.append(self.copy(area=area))
-        elif self.city is None and cities is not None:
-            for city in cities:
+        elif self.city is None and df_prov_area_city is not None:
+            for city in columnValues(df_prov_area_city[df_prov_area_city['prov'] == self.prov][df_prov_area_city['area'] == self.area], 'city'):
                 self.subScales.append(self.copy(city=city))
         elif self.sale is None:
             for sale in [True, False]:
@@ -132,18 +132,13 @@ class EstimateScale:
 
     def buildAllSubScales(
         self,
-        provs: list = None,
-        areas: list = None,
-        cities: list = None,
-        showProgress: bool = True,
+        df_prov_area_city: pd.DataFrame = None,
     ):
-        subs = self.getSubScales(provs, areas, cities)
+        subs = self.getSubScales(df_prov_area_city=df_prov_area_city)
         if subs is None:
             return
         for sub in subs:
-            sub.buildAllSubScales(provs, areas, cities)
-            if showProgress:
-                logger.debug(sub)
+            sub.buildAllSubScales(df_prov_area_city=df_prov_area_city)
 
     def getLeafScales(
         self,
@@ -203,7 +198,7 @@ class EstimateScale:
             keys.append('O')
         for key in ['prov', 'area', 'city']:
             if self.__dict__[key]:
-                keys.append(self.__dict__[key])
+                keys.append(str(self.__dict__[key]))
             else:
                 keys.append('-')
         if self.sale:
@@ -234,7 +229,7 @@ class EstimateScale:
             keys.append('Other')
         for key in ['prov', 'area', 'city']:
             if self.__dict__[key]:
-                keys.append(self.__dict__[key])
+                keys.append(str(self.__dict__[key]))
         if self.sale:
             keys.append('Sale')
         elif self.sale is False:

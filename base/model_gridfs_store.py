@@ -40,7 +40,11 @@ class GridfsStore(ModelStore):
                                    no_cursor_timeout=True):
             bucket.delete(oldFile._id)
         # save the new version
-        if meta is not None:
+        if meta is None:
+            meta = {
+                'accuracy': accuracy,
+            }
+        else:
             meta['accuracy'] = accuracy
         f = bucket.open_upload_stream(
             filename=filename, metadata=meta)
@@ -54,6 +58,7 @@ class GridfsStore(ModelStore):
         f = getGridFS(self.collection).get_last_version(filename=filename)
         if f is None:
             raise FileNotFoundError('No model file found.')
+        meta = {}
         if f.metadata is None:
             accuracy = 0
         else:  # f.metadata is not None

@@ -103,11 +103,11 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
         self : object
             Returns self.
         """
-        logger.debug(f'fit {self.col}')
+        # logger.debug(f'fit {self.col}')
         self._errors = {}
 
         if self.map is None:
-            logger.debug(f'fit {self.col} build map')
+            # logger.debug(f'fit {self.col} build map')
             col_index = X[self.col].value_counts().index
             # TODO: support array?
             col_values = [v + self.sufix for v in col_index]
@@ -137,7 +137,7 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
         X_transformed : {array-like, sparse matrix}, shape (n_samples, n_features_)
             The transformed data.
         """
-        logger.debug(f'transform {self.col}')
+        # logger.debug(f'transform {self.col}')
         t = Timer(self.col, logger)
         list_value_count = 0
         str_value_count = 0

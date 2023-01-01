@@ -15,9 +15,10 @@ Baseline is calculated on both average and median, and a standard deviation for 
 
 A delta(price difference) is calculated for each of the following:
 
-- Community baseline to city baseline
-- Type of building baseline to city baseline
-- Each feature value to the feature baseline: [Feature list](#feature-list)
+- Community baseline to the city baseline
+- Type of building baseline to the city baseline
+- Each feature value to the feature baseline in the city level: [Feature list](#feature-list)
+- Each feature value to the feature baseline on the type of building in city level: [Feature list](#feature-list)
 
 Every community, type of building will be assigned a numeric value based on its delta on thousand dollars. For features with discrete values, feature value will be mapped to a new numeric value based on its delta on thousand dollars. The new numeric value will be used to replace the original value in the data.
 For example, if the delta of a feature value is 2 and average value is 1.5, the feature delta for value 2 is 5 thousand dollars, the mapping ratio will be 5/(2-1.5) = 5/0.5 = 10. The new numeric value will be (2-1.5)\*10 = 5. The ratio will be the average of all the delta of the training set for the feature value.
@@ -27,6 +28,9 @@ For example, if the delta of a feature value is 5200 and average value is 4000, 
 
 A standard deviation is calculated for each of the mapping or ratio for each feature. The mapping or ratio will be used to calculate the new numeric value for the test set. The new numeric value will be either map(original value) or (original value - feature baseline)\*ratio.
 The standard deviation will be used to calculate the confidence interval for the new numeric value.
+
+CI(confidence interval) = (new numeric value +/- Z \* standard deviation/sqre(sample-count))
+[CI = \bar{x} \pm z \frac{s}{\sqrt{n}}](https://www.mathsisfun.com/data/confidence-interval.html)
 
 The mappings, ratio and standard deviation(s) will be saved for each feature.
 
@@ -43,9 +47,10 @@ The mappings, ratio and standard deviation(s) will be saved for each feature.
 - room size total area
 - built year
 - sqft
-- month(sold date) \*1: reorganized based on price baseline instead of calendar month. Month 0 is 2 years ago, and month 24 is this month.
+- month(sold date) \*1: reorganized based on price baseline instead of calendar month. Month 0 is 2 years ago, and month 24 is this month. Calculate 4 years of data.
 
 \*1 discrete values
+\*2 based to the feature baseline of the city and type of building
 
 ### 1.2 Evaluation based on features
 

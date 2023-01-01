@@ -44,7 +44,6 @@ class SoldPriceLgbmEstimateManager(LgbmEstimateManager):
         return super().load_scales(sale=True)
 
     def my_load_data(self, scale: EstimateScale = None) -> pd.DataFrame:
-        scale = scale or self.data_source.scale
         scale = scale.copy(sale=True)
         return self.load_data(
             scale=scale,

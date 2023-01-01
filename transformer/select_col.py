@@ -53,7 +53,7 @@ class SelectColumnTransformer(TransformerMixin, BaseEstimator):
         self : object
             Returns self.
         """
-        logger.debug(f'fit {self.columns}')
+        # logger.debug(f'fit {self.columns}')
         return self
 
     def transform(self, X):
@@ -69,7 +69,7 @@ class SelectColumnTransformer(TransformerMixin, BaseEstimator):
         X_transformed : {array-like, sparse matrix}, shape (n_samples, n_features_)
             The transformed data.
         """
-        logger.debug(f'transform {self.columns}')
+        # logger.debug(f'transform {self.columns}')
         self.count_found = dict(zip(self.columns, [0]*len(self.columns)))
         self.count_found['not_found'] = 0
 
@@ -85,5 +85,5 @@ class SelectColumnTransformer(TransformerMixin, BaseEstimator):
             self.count_found['not_found'] += 1
             return self.as_na_value
         X.loc[:, self.new_col] = X.apply(select_col, axis=1)
-        logger.debug(f'found {self.count_found}')
+        # logger.debug(f'found {self.count_found}')
         return X

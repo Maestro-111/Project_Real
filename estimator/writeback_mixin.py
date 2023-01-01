@@ -32,11 +32,17 @@ class WritebackMixin:
         timer = Timer(new_col, self.logger)
         timer.start()
         counter = 0
+        model_key = self.__model_key__()
         for scale in self.scales.values():
+
+            if not hasattr(scale.meta, model_key):
+                continue
+            model_dict = scale.meta[model_key]
+            if model_dict['model'] is None:
+                continue
             df = self.load_data(scale=scale)
             # fill missing values with mean
             df.fillna(df.mean())
-            model_dict = scale.meta[self.__model_key__()]
             x_cols = model_dict['x_cols']
             y = model_dict['model'].predict(df[x_cols])
             df[new_col] = y

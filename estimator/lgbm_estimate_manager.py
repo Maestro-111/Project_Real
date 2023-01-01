@@ -1,3 +1,4 @@
+from base.const import TRAINING_MIN_ROWS
 from base.timer import Timer
 from data.estimate_scale import EstimateScale
 from estimator.rmbase_estimate_manager import ModelClass, RmBaseEstimateManager
@@ -65,6 +66,8 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         timer = Timer(str(scale), self.logger)
         timer.start()
         df = self.my_load_data(scale)
+        if df is None or df.empty or df.shape[0] < TRAINING_MIN_ROWS:
+            return (None, None, None, None, None, None)
         df_train, df_test = train_test_split(
             df, test_size=0.15, random_state=10)
         model = self.prepare_model()

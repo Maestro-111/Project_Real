@@ -41,17 +41,13 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
 
     def __init__(
         self,
-        collection,
         col: str,
-        mode: Mode = Mode.TRAIN,
         na_value=None,
-        save_to_db: bool = SAVE_LABEL_TO_DB,
+        collection: str = None,
     ):
         self.collection = collection
         self.col = col
-        self.mode = mode
         self.na_value = na_value
-        self.save_to_db = save_to_db
 
     def get_feature_names(self):
         return [self.col+'-c']
@@ -63,33 +59,52 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
 
     def _connect_db(self):
         if hasattr(self, '_db_connected') and self._db_connected:
-            return
+            return self._db_connected
         if not self.collection:
             logger.warn("No collection specified")
-            return
-        if self.mode is Mode.TRAIN and not self.save_to_db:
             return
         # create index on col
         MongoDB = getMongoClient()
         if not MongoDB.hasIndex(self.collection, 'col'):
             MongoDB.createIndex(self.collection, fields=[
                 ("col", 1), ('i', 1)], unique=True)
-        # load from database when predicting
-        if self.mode == Mode.PREDICT:
-            self.labels_ = {}
-            self.labels_index_ = {}
-            self.labels_index_next_ = 0
-            for doc in MongoDB.find(self.collection, {'col': self.col}):
-                self.labels_[doc['col']][doc['label']] = doc['i']
-                self.labels_index_[doc['col']][doc['i']] = doc['label']
-                if doc['i'] > self.labels_index_next_[self.col]:
-                    self.labels_index_next_[self.col] = doc['i']
-        self._db_connected = True
+        self._db_connected = MongoDB
+        return MongoDB
+
+    def load_from_db(self):
+        if self.collection is None:
+            return
+        MongoDB = self._connect_db()
+        self.labels_ = {}
+        self.labels_index_ = {}
+        self.labels_index_next_ = 0
+        for doc in MongoDB.find(self.collection, {'col': self.col}):
+            self.labels_[doc['label']] = doc['i']
+            self.labels_index_[doc['i']] = doc['label']
+            if doc['i'] > self.labels_index_next_:
+                self.labels_index_next_ = doc['i']
+
+    def save_to_db(self):
+        if self.collection is None:
+            return
+        to_save = []
+        for label, index in self.labels_.items():
+            to_save.append({
+                "_id": f"{self.col}:{label}",
+                "col": self.col,
+                "label": label,
+                "i": index,
+                "cnt": self.labels_count_[label],
+            })
+        MongoDB = self._connect_db()
+        MongoDB.deleteMany(self.collection, {'col': self.col})
+        MongoDB.insertMany(self.collection, to_save)
 
     def _save_mapping(self, col: str, label: str, index: int, count: int):
-        if not self.save_to_db:
+        if self.collection is None:
             return
-        getMongoClient().save(self.collection, {
+        MongoDB = self._connect_db()
+        MongoDB.save(self.collection, {
             "_id": f"{col}:{label}",
             "col": col,
             "label": label,
@@ -112,46 +127,45 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
             Returns self.
         """
         logger.debug(
-            f'label {self.col} fit {self.mode}')
-        self._connect_db()
+            f'label {self.col} fit')
         # X = check_array(X, accept_sparse=True)
 
         # self.n_features_ = X.shape[1]
 
-        if self.mode is Mode.TRAIN:
-            t = Timer(self.col, logger)
-            col = self.col  # TODO: deal with multiple columns
-            if self.save_to_db:
-                getMongoClient().deleteMany(self.collection, {'col': col})
-            #logger.debug(f'set self.labels_ {self.col}')
-            self.labels_ = {col: {}}
-            self.labels_index_ = {col: {}}
-            self.labels_index_next_ = {col: 0}
-            try:
-                col_labels = X.value_counts()
-            except TypeError as e:
-                logger.fatal(X)
-                logger.fatal(e)
-                raise e
+        t = Timer(self.col, logger)
+
+        #logger.debug(f'set self.labels_ {self.col}')
+        self.labels_ = {}
+        self.labels_count_ = {}
+        self.labels_index_ = {}
+        self.labels_index_next_ = 0
+        try:
+            col_labels = X.value_counts()
             col_labels.index = col_labels.index.astype(str)
-            col_labels = col_labels.sort_index()
-            totalLabels = 0
-            for label, count in col_labels.items():
-                if label is None:
-                    if self.na_value is not None:
-                        label = self.na_value
-                    else:
-                        continue
-                cur_index = self.labels_index_next_[col]
-                self.labels_[col][label] = cur_index
-                self.labels_index_[col][cur_index] = label
-                self._save_mapping(col, label, cur_index, count)
-                self.labels_index_next_[col] += 1
-                totalLabels += 1
+            col_labels = col_labels.sort_values(
+                ascending=False)  # sort by count, more to less
+        except TypeError as e:
+            logger.fatal(X)
+            logger.fatal(e)
+            raise e
+        # make sure the index is string
+        totalLabels = 0
+        for label, count in col_labels.items():
+            if label is None:
+                if self.na_value is not None:
+                    label = self.na_value
+                else:
+                    continue
+            cur_index = self.labels_index_next_
+            self.labels_[label] = cur_index
+            self.labels_index_[cur_index] = label
+            self.labels_index_next_ += 1
+            self.labels_count_[label] = count
+            totalLabels += 1
             # print(self.labels_)
-            logger.info(
-                f'{self.col} fit {self.mode} labels:{totalLabels}')
-            t.stop(X.shape[0])
+        self.save_to_db()
+        logger.info(f'{self.col} fit labels:{totalLabels}')
+        t.stop(X.shape[0])
 
         # Return the transformer
         return self
@@ -181,29 +195,31 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         #                      'in `fit`')
         # we may need to use a wrapper here
         # X = pd.DataFrame(X)
-        logger.debug(f'label {self.col} transform {self.mode}')
-        self._connect_db()
-        if self.mode == Mode.TRAIN:
-            if (getattr(self, 'labels_', None) is None) or (self.col not in self.labels_):
-                self.fit(X)
+        logger.debug(f'label {self.col} transform')
         # fill na_value
         if self.na_value is not None:
             X.fillna(value=self.na_value, inplace=True)
 
         # transform with new column names and add new labels as needed
-        X = X.apply(str)  # convert string
-        mapping = self.labels_[self.col]
 
-        def map_value(label, mapping, self, col):
-            index = mapping.get(label)
-            if index is None:
-                logger.info(f'unknown label {label} in column {col}')
-                index = self.labels_index_next_[col]
-                mapping[label] = index
-                self.labels_index_next_[col] += 1
-                self._save_mapping(col, label, index, 0)
+        def map_value(label, self):
+            if label is None:
+                return None
+            if isinstance(label, list):  # when label is a list
+                return max([map_value(l, self) for l in label])
+            index = self.labels_.get(label, None)
+            if isinstance(index, int):
+                return index
+            logger.info(
+                f'unknown label {label} {type(label)} in column {self.col}')
+            label = str(label)
+            index = self.labels_index_next_
+            self.labels_[label] = index
+            self.labels_index_next_ += 1
+            self.labels_count_[label] = 1
+            self._save_mapping(self.col, label, index, 1)
             return index
         X = X.apply(
-            lambda val: map_value(val, mapping, self, self.col))
+            lambda val: map_value(val, self))
         # return X
         return X

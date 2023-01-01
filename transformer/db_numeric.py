@@ -44,37 +44,39 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         self,
         collection: str,
         col: str,
-        mode: Mode = Mode.TRAIN,
         na_value: Union[str, int, float] = None,
-        est_scale: EstimateScale = None,
+        scale: EstimateScale = None,
     ):
         self.collection = collection
         self.col = col
-        self.mode = mode
         self.na_value = na_value
-        self.est_scale = est_scale
+        self.scale = scale
 
     def get_feature_names(self):
         return [self.col+'-n']
 
-    def set_params(self, **params):
-        ret = super().set_params(**params)
-        self._connect_db()
-        return ret
-
-    def _connect_db(self):
-        if hasattr(self, '_db_connected') and self._db_connected:
-            return
-        if self.est_scale:
-            self.est_scale_str = EstimateScale.to_str(self.est_scale) + ':'
+    def __get_db_id(self):
+        if self.scale:
+            scale_repr = repr(self.scale) + ':'
         else:
-            self.est_scale_str = ''
-        self.db_id = f"{self.est_scale_str}{self.col}_n"
-        self.stats = {}
-        if self.mode == Mode.PREDICT:
-            self.stats = getMongoClient().findOne(
-                self.collection, {"_id": self.db_id})
-        self._db_connected = True
+            scale_repr = ''
+        return f"{scale_repr}{self.col}_n"
+
+    def load_from_db(self):
+        record = getMongoClient().findOne(
+            self.collection, {"_id": self.__get_db_id()})
+        if record:
+            self.stats_ = record['stats']
+        return self.stats
+
+    def save_to_db(self):
+        record = {
+            "_id": self.__get_db_id(),
+            "stats": self.stats_,
+            "col": self.col,
+            "na_value": self.na_value,
+        }
+        getMongoClient().save(self.collection, record)
 
     def _save_values(self, col_stats: dict):
         record = {**col_stats,
@@ -99,7 +101,7 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         self : object
             Returns self.
         """
-        logger.debug(f'number {self.col} fit {self.mode}')
+        logger.debug(f'number {self.col} fit')
         # X = check_array(X, accept_sparse=True)
 
         # self.n_features_ = X.shape[1]
@@ -107,28 +109,25 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         # if self.n_features_ != 1:
         #     raise ValueError('Only one column is allowed')
 
-        if self.mode == Mode.TRAIN:
-            self._connect_db()
-            t = Timer(self.col, logger)
-            t.start()
-            X = X.astype(float)
-            # get mean, median, std, min, max, count
-            describe = stats.describe(X, nan_policy='omit')
-            mdeian = np.nanmedian(X)
-            self.stats = {
-                "mean": float(describe.mean),
-                "median": mdeian,
-                "min": float(describe.minmax[0]),
-                "max": float(describe.minmax[1]),
-                "std": math.sqrt(describe.variance),
-                "count": int(describe.nobs),
-                "variance": float(describe.variance),
-                "skewness": float(describe.skewness),
-                "kurtosis": float(describe.kurtosis),
-            }
-            self._save_values(self.stats)
-            t.stop(X.shape[0])
-        self.stats_ = self.stats
+        t = Timer(self.col, logger)
+        t.start()
+        X = X.astype(float)
+        # get mean, median, std, min, max, count
+        describe = stats.describe(X, nan_policy='omit')
+        mdeian = np.nanmedian(X)
+        self.stats_ = {
+            "mean": float(describe.mean),
+            "median": mdeian,
+            "min": float(describe.minmax[0]),
+            "max": float(describe.minmax[1]),
+            "std": math.sqrt(describe.variance),
+            "count": int(describe.nobs),
+            "variance": float(describe.variance),
+            "skewness": float(describe.skewness),
+            "kurtosis": float(describe.kurtosis),
+        }
+        self.save_to_db()
+        t.stop(X.shape[0])
         # Return the transformer
         return self
 
@@ -158,8 +157,7 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
 
         # we may need to use a wrapper here
         # X = pd.DataFrame(X)
-        logger.debug(f'number {self.col} transform {self.mode}')
-        self._connect_db()
+        logger.debug(f'number {self.col} transform')
         if isinstance(self.na_value, str):
             if self.na_value == DROP:
                 na_value = np.nan

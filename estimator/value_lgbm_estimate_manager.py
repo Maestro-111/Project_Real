@@ -3,6 +3,8 @@ from estimator.lgbm_estimate_manager import LgbmEstimateManager
 import pandas as pd
 from math import isnan
 
+from estimator.writeback_mixin import WritebackMixin
+
 ESTIMATOR_NAME = 'Value'
 
 
@@ -11,9 +13,10 @@ def needSold(row):
         (row['sp-n'] > 200000)
 
 
-class ValueLgbmEstimateManager(LgbmEstimateManager):
+class ValueLgbmEstimateManager(LgbmEstimateManager, WritebackMixin):
     """Value estimate manager."""
 
+    y_target_col = 'value-n-e'
     y_column = 'sp-n'
     x_columns = [
         'onD',

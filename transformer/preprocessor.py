@@ -295,10 +295,8 @@ class Preprocessor(TransformerMixin, BaseEstimator):
 
     def __init__(
         self,
-        mode: Mode = Mode.PREDICT,
         collection_prefix: str = 'ml_'
     ):
-        self.mode: Mode = mode
         self.collection_prefix: str = collection_prefix
 
     def get_feature_columns(
@@ -334,7 +332,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
 
         colTransformerParams = [
             ('saletp-b', binarySaletpByRow, 'saletp', 'saletp-b'),
-            ('ptype2-l', ptype2SingleValue, 'ptype2', 'ptype2-l'),
+            ('ptype2-l', ptype2SingleValue, 'ptype2', 'ptype2-l', True),
         ]
         all_cols.append('saletp-b')
         all_cols.append('ptype2-l')
@@ -380,13 +378,17 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                         col=k,
                         map=v['map'],
                         sufix='-b',
-                        collection=self.label_collection,
-                        mode=self.mode,
                         na_value=None,
+                        collection=self.label_collection,
                     )
                 else:
                     transformer = DbOneHotArrayEncodingTransformer(
-                        k, v['map'], '-b')
+                        col=k,
+                        map=v['map'],
+                        sufix='-b',
+                        # na_value=None,
+                        # collection=self.label_collection,
+                    )
                 colTransformerParams.append((f'{k}_x', transformer))
                 all_cols.extend(transformer.get_feature_names_out())
         # binary columns
@@ -400,10 +402,10 @@ class Preprocessor(TransformerMixin, BaseEstimator):
             if k in all_cols:
                 colTransformerParams.append(
                     (f'{k}-c', DbLabelTransformer(
-                        self.label_collection,
                         col=k,
-                        mode=self.mode,
-                        na_value=v['na'],), k, f'{k}-c'))
+                        na_value=v['na'],
+                        collection=self.label_collection,
+                    ), k, f'{k}-c'))
                 all_cols.append(f'{k}-c')
         # numerical columns
         for k, v in self.cols_numeric.items():
@@ -412,7 +414,6 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                     (f'{k}-n', DbNumericTransformer(
                         self.number_collection,
                         col=k,
-                        mode=self.mode,
                         na_value=v['na'],), k, f'{k}-n'))
                 all_cols.append(f'{k}-n')
         if 'st_num' in all_cols:
@@ -433,10 +434,10 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                 drop_na_cols.append(k)
         self.drop_na_cols_ = drop_na_cols
         colTransformerParams.append(
-            ('drop_na', DropRowTransformer(drop_cols=drop_na_cols, mode=self.mode))
+            ('drop_na', DropRowTransformer(drop_cols=drop_na_cols))
         )
         colTransformerParams.append(
-            ('drop_check', DropRowTransformer(drop_func=shallDrop, mode=self.mode))
+            ('drop_check', DropRowTransformer(drop_func=shallDrop))
         )
 
         # create the pipeline

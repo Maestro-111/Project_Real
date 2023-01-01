@@ -14,6 +14,7 @@ def needRent(row):
 class RentLgbmManager(LgbmEstimateManager):
     """Rent estimate manager."""
 
+    y_target_col = 'rent-n-e'
     y_column = 'sp-n'
     # x_columns = [
     #     'lat', 'lng',

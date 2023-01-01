@@ -38,7 +38,7 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
             'onD-2k-n',
             'onD-year-n',
             'onD-month-n',
-            'onD-week-n'
+            'onD-week-n',
             'onD-season-n',
             'onD-dayOfWeek-n',
             'onD-dayOfMonth-n',
@@ -109,6 +109,8 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
         totalCount = 0
         for col in self.get_feature_names_out():
             X[col] = None
+        hasOffD = 'offD' in X.columns
+        hasSldd = 'sldd' in X.columns
         for i, row in X.iterrows():
             totalCount += 1
             onD = dateFromNum(row['onD'])
@@ -121,7 +123,7 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
                 X.loc[i, 'onD-dayOfWeek-n'] = onD.weekday()
                 X.loc[i, 'onD-dayOfMonth-n'] = onD.day
                 X.loc[i, 'onD-dayOfYear-n'] = onD.timetuple().tm_yday
-                if self.offD:
+                if hasOffD:
                     offD = dateFromNum(row['offD'])
                     if offD is not None:
                         X.loc[i, 'offD-2k-n'] = abs(
@@ -131,7 +133,8 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
                         offDNanCount += 1
             else:
                 nanCount += 1
-            if self.sldd:
+                logger.warn(f'onD is None: {row}')
+            if hasSldd:
                 sldd = dateFromNum(row['sldd'])
                 if sldd is not None:
                     X.loc[i, 'sldd-n'] = abs((sldd - DATE_20000101).days)

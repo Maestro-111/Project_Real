@@ -14,6 +14,7 @@ def needSold(row):
 class SoldPriceLgbmEstimateManager(LgbmEstimateManager):
     """SoldPrice estimate manager."""
 
+    y_target_col = 'saleprice-n-e'
     y_column = 'sp-n'
     x_columns = [
         'lp-n',

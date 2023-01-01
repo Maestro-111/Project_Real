@@ -61,58 +61,104 @@ class RmBaseEstimateManager:
         for scale in self.data_source.scale.getLeafScales(sale=sale):
             self.scales[repr(scale)] = scale
 
+    def __model_key__(self) -> str:
+        return f'{self.name}:{self.model_name}'
+
     def train(self) -> None:
         """Train the estimator.
         Train the estimator(s) for the specified scale or all scales.
         """
         if hasattr(self, 'scale'):
-            scale, model, accuracy, x_cols, meta = self.train_single_scale(
+            scale, model, accuracy, x_cols, x_means, meta = self.train_single_scale(
                 scale)
-            scale.model = model
-            scale.accuracy = accuracy
-            scale.x_cols = x_cols
-            scale.meta = meta
+            model_dict = {
+                'model': model,
+                'accuracy': accuracy,
+                'x_cols': x_cols,
+                'x_means': x_means,
+                'feature_importance': meta['feature_importance'],
+            }
+            scale.meta[self.__model_key__()] = model_dict
         elif hasattr(self, 'scales'):
             for scale in self.scales.values():
-                scale, model, accuracy, x_cols, meta = self.train_single_scale(
+                scale, model, accuracy, x_cols, x_means, meta = self.train_single_scale(
                     scale)
-                scale.meta['model'] = model
-                scale.meta['accuracy'] = accuracy
-                scale.meta['x_cols'] = x_cols
-                scale.meta['meta'] = meta
+                model_dict = {
+                    'model': model,
+                    'accuracy': accuracy,
+                    'x_cols': x_cols,
+                    'x_means': x_means,
+                    'feature_importance': meta['feature_importance'],
+                }
+                scale.meta[self.__model_key__()] = model_dict
         else:
             self.logger.warning(
                 'No scale or scales defined. Load scales first.')
             self.load_scales()
             self.train()
 
-    def train_single_scale(self, scale: EstimateScale) -> tuple[EstimateScale, object, float, list[str], dict]:
+    def train_single_scale(self, scale: EstimateScale) -> tuple[EstimateScale, object, float, list[str], pd.Series, dict]:
         """Train the estimator for a single scale.
         This method is called by train method.
         """
         raise NotImplementedError
 
-    def estimate(self, X: pd.DataFrame, scale: EstimateScale = None) -> pd.DataFrame:
+    def get_output_column(self) -> str:
+        return getattr(self, 'y_target_col', (self.y_column + '-e'))
+
+    def estimate(self, df_grouped: pd.DataFrame) -> tuple[pd.DataFrame, str]:
         """Estimate the data source.
         Either train or load must be called before this.
-        steps:
-            1. group data by scale if not specified
-            2. preprocess data
-            3. estimate by scale estimator
-            4. merge results
         """
-        # TODO: implement this
-        raise NotImplementedError
+        if hasattr(self, 'scale'):
+            return self.estimate_single_scale(
+                df_grouped=df_grouped, scale=scale)
+        elif hasattr(self, 'scales'):
+            df_y_list = []
+            y_cols_set = set()
+            for scale in self.scales.values():
+                df_y, y_cols = self.estimate_single_scale(
+                    df_grouped=df_grouped, scale=scale)
+                if df_y is not None:
+                    df_y_list.append(df_y)
+                    y_cols_set.update(y_cols)
+            if len(df_y_list) > 0:
+                df_y = pd.concat(df_y_list)
+                return df_y, list(y_cols_set)
+            else:
+                return None, None
+        else:
+            self.logger.error(
+                'No scale or scales defined.')
+            raise Exception('No scale or scales defined.')
 
-    def estimate_by_id(self, id: str) -> pd.DataFrame:
-        """Estimate the data source by id.
-        Either train or load must be called before this.
-        steps:
-            1. read data from database
-            2. use estimate method to estimate
+    def estimate_single_scale(self, df_grouped: pd.DataFrame, scale: EstimateScale) -> tuple[pd.DataFrame, list[str]]:
+        """Estimate the data source for a single scale.
+        This method is called by estimate method.
         """
-        # TODO: implement this
-        raise NotImplementedError
+        # load data:
+        # date_span=-1 means do not filter by date
+        # sale is set to both to load all data
+        filterScale = scale.copy(sale='Both')
+        df = self.load_data(df_grouped=df_grouped,
+                            scale=filterScale, date_span=-1)
+        if df is None or df.empty or df.shape[0] == 0:
+            return None, None
+        model_dict = scale.meta[self.__model_key__()]
+        model = model_dict['model']
+        x_cols = model_dict['x_cols']
+        x_means = model_dict['x_means']
+        if x_means is None:
+            raise Exception('x_means not found.')
+        # fill missing values with mean
+        for col in list(set(x_cols) - set(df.columns)):
+            df[col] = x_means[col]
+        self.logger.info(df.head())
+        y = model.predict(df[x_cols])
+        y_target_col = self.get_output_column()
+        df[y_target_col] = y
+        df[y_target_col+'-acu'] = model_dict['accuracy']
+        return (df.loc[:, [y_target_col, y_target_col+'-acu']], [y_target_col, y_target_col+'-acu'])
 
     def save(self, store: ModelStore) -> None:
         """Save the estimator(s).
@@ -120,37 +166,44 @@ class RmBaseEstimateManager:
         """
         if hasattr(self, 'scale'):
             self.save_one_model(
-                store, (self.scale, self.model, self.accuracy, self.meta))
+                store, self.scale)
         elif hasattr(self, 'scales'):
             for scale in self.scales.values():
-                data = (scale, scale.meta['model'],
-                        scale.meta['accuracy'], scale.meta['meta'])
-                self.save_one_model(store, data)
+                self.save_one_model(store, scale)
         else:
             raise Exception('No scale or scales is set.')
 
-    def save_one_model(self, store: ModelStore, data: tuple[EstimateScale, any, float, dict]) -> None:
+    def save_one_model(self, store: ModelStore, scale: EstimateScale) -> None:
         """Save one estimator."""
+        model_dict = scale.meta[self.__model_key__()]
         # estimator name, model name, scale, date
-        filename = ':'.join([self.name, self.model_name, repr(data[0])])
+        filename = ':'.join([self.name, self.model_name, repr(scale)])
         meta = {
-            'accuracy': data[2],
+            'accuracy': model_dict['accuracy'],
+            'x_cols': model_dict['x_cols'],
+            'x_means': model_dict['x_means'],
+            'feature_importance': model_dict['feature_importance'],
             'ts': datetime.now(),
         }
-        if len(data) > 3:
-            meta.update(data[3])
         self.logger.info('Saving model: %s', filename)
-        store.save_model(filename, data[1], data[2], meta)
+        store.save_model(
+            filename, model_dict['model'], model_dict['accuracy'], meta)
 
     def load(self, store: ModelStore):
         """Load the estimator(s)."""
         if hasattr(self, 'scale'):
-            scale, self.model, self.accuracy, self.meta = self.load_one_model(
+            scale, model, accuracy, meta = self.load_one_model(
                 store, self.scale)
+            meta['model'] = model
+            meta['accuracy'] = accuracy
+            self.scale.meta[self.__model_key__()] = meta
         elif hasattr(self, 'scales'):
             for scale in self.scales.values():
-                scale, scale.meta['model'], scale.meta['accuracy'], scale.meta['meta'] = self.load_one_model(
+                scale, model, accuracy, meta = self.load_one_model(
                     store, scale)
+                meta['model'] = model
+                meta['accuracy'] = accuracy
+                scale.meta[self.__model_key__()] = meta
         else:
             raise Exception('No scale or scales is set.')
 
@@ -166,11 +219,6 @@ class RmBaseEstimateManager:
             self.logger.error('Failed to load model: %s', filename)
             raise e
         return (scale, model, accuracy, meta)
-
-    def propToScale(self, prop: str) -> EstimateScale:
-        """Get the scale from the property."""
-        # TODO: implement this
-        return self.scales[prop]
 
     # ---- Feature selection ----
     def select_features(self, X: pd.DataFrame) -> pd.DataFrame:
@@ -196,6 +244,7 @@ class RmBaseEstimateManager:
         suffix_list: list[str] = None,
         numeric_columns_only: bool = None,
         prefer_estimated: bool = False,
+        df_grouped: pd.DataFrame = None,
     ) -> pd.DataFrame:
         """Load the data and set it to self.df.
         Use the default values if not specified:
@@ -228,8 +277,9 @@ class RmBaseEstimateManager:
             suffix_list=suffix_list or self.suffix_list,
             numeric_columns_only=numeric_columns_only,
             prefer_estimated=prefer_estimated,
+            df_grouped=df_grouped,
         )
-        self.logger.info(f'Data loaded. {suffix_list or self.suffix_list}')
+        # self.logger.info(f'Data loaded. {suffix_list or self.suffix_list}')
         return df
 
     def filter_data(
@@ -243,7 +293,7 @@ class RmBaseEstimateManager:
         self,
         df: pd.DataFrame,
         y_column: str = None,
-    ) -> tuple[list[str], str]:
+    ) -> tuple[list[str], str, pd.Series]:
         """Get numeric columns of x and y from df."""
         df = self.filter_data(df)
         y_column = y_column or self.y_column
@@ -261,7 +311,8 @@ class RmBaseEstimateManager:
         x_numeric_columns.remove(y_numeric_column)
         self.logger.info(
             f'*{self.name}* X: {x_numeric_columns} y: {y_numeric_column}')
-        return x_numeric_columns, y_numeric_column
+        x_means = df[x_numeric_columns].mean()
+        return x_numeric_columns, y_numeric_column, x_means
 
     def test_accuracy(self, model, X_test, y_test) -> float:
         """Calculate the accuracy of the model."""
@@ -272,11 +323,12 @@ class RmBaseEstimateManager:
 
     def get_score(self, y_true, y_pred) -> float:
         """Get the accuracy score."""
-        if self.model_class is None or self.model_class == ModelClass.Regression:
-            pred_accuracy_score = r2_score(y_true, y_pred)
-        elif self.model_class == ModelClass.Classification:
+        if self.model_class == ModelClass.Classification:
             pred_accuracy_score = accuracy_score(y_true, y_pred)
+        elif self.model_class is None or self.model_class == ModelClass.Regression:
+            pred_accuracy_score = r2_score(y_true, y_pred)
         else:
-            raise ValueError(
-                f'Model class is not specified. {self.model_class}')
+            self.logger.error(
+                f'Lost model class: {self.model_class} {type(self.model_class)} {self}')
+            pred_accuracy_score = r2_score(y_true, y_pred)
         return pred_accuracy_score

@@ -131,12 +131,18 @@ class Organizer:
         self.__update_status('init transformers', 'run')
         if self.data_source is None:
             self.load_data()
-        self.root_preprocessor = Preprocessor(Mode.TRAIN)
+        self.root_preprocessor = Preprocessor()
         self.data_source.transform_data(self.root_preprocessor)
         self.__update_status('init transformers', 'done')
 
     def train_models(self):
-        for estimate_manager in [BuiltYearLgbmManager, SqftLgbmEstimateManager, RentLgbmManager, ValueLgbmEstimateManager, SoldPriceLgbmEstimateManager]:
+        for estimate_manager in [
+            BuiltYearLgbmManager,
+            SqftLgbmEstimateManager,
+            RentLgbmManager,
+            ValueLgbmEstimateManager,
+            SoldPriceLgbmEstimateManager,
+        ]:
             em = estimate_manager(self.data_source)
             em.load_scales()
             em.train()
@@ -153,119 +159,51 @@ class Organizer:
             for em in estimate_manager.values():
                 em.save(self.model_store)
 
-    def train_writeback_predictors(self):
-        """Train predictors."""
-        self.__update_status('train writeback predictors', 'run')
+    def load_models(self):
+        """load models from database."""
+        # TODO: load models from database
+        pass
+
+    def predict(self, id_list: list[str], writeback: bool = False):
+        """Predict the values for the given list of ids."""
+        self.__update_status('predict', 'run')
         if self.data_source is None:
+            self.load_data()
+        if self.root_preprocessor is None:
             self.init_transformers()
-        self.writeback_predictors.clear()
-        for Predictor in [BuiltYearEstimator, SqftEstimator, ValueEstimator]:
-            predictor = Predictor(
-                data_source=self.data_source,
-                model_store=self.model_store,
-                scale=self.default_sale_scale,
-            )
-            self.writeback_predictors.append(predictor)
-            # later predictor needs the results of previous predictors
-            self.__predictor_train_and_writeback(predictor)
-        # TODO:
-        return
-        for Predictor in [RentValueEstimator]:
-            predictor = Predictor(
-                data_source=self.data_source,
-                model_store=self.model_store,
-                scale=self.default_rent_scale,
-            )
-            self.writeback_predictors.append(predictor)
-            self.__predictor_train_and_writeback(predictor)
-        # self.__train_predictors()
-        self.__update_status('train writeback predictors', 'done')
+        if not self.estimate_managers:
+            self.load_models()
+        df_grouped_result, added_cols = self.__predict(id_list, writeback)
+        # self.__predict_parallel(id_list)
+        self.__update_status('predict', 'done')
+        return df_grouped_result, added_cols
 
-    def __predictor_train_and_writeback(self, predictor):
-        score = predictor.train()
-        logger.info(f'{predictor.name} score: {score:.4f}')
-        if getattr(predictor, 'writeback', None) is not None:
-            predictor.writeback()
-
-    def train_predictors(self):
-        """Train predictors."""
-        self.__update_status('train predictors', 'run')
-        if self.data_source is None:
-            self.init_transformers()
-        self.__build_predictors()
-        self.__train_predictors()
-        # self.__train_predictors()
-        self.__update_status('train predictors', 'done')
-
-    def __build_predictors(self):
-        """Build predictors."""
-        self.predictors.clear()
-        for Predictor in [BuiltYear, Sqft, Value]:
-            self.predictors.append(Predictor(
-                data_source=self.data_source,
-                model_store=self.model_store,
-                scale=self.default_scale,
-            ))
-
-    def __train_predictors(self):
-        """Create predictors and train them."""
-        # for predictor in self.predictors:
-        #     score = predictor.train()
-        #     logger.info(f'{predictor.name} score: {score:.4f}')
-        num_procs = min((psutil.cpu_count(logical=False) - 1),
-                        CONCURRENT_PROCESSES_MAX,
-                        self.num_procs,
-                        len(self.predictors))
-        logger.info(f'num_procs: {num_procs}')
-        timer = Timer(f'predictors', logger)
-        pred_results = []
-        splitted_predictors = np.array_split(self.predictors, num_procs)
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_procs) as executor:
-            results = [
-                executor.submit(_predictor_train, predictors)
-                for predictors in splitted_predictors
-            ]
-            for result in concurrent.futures.as_completed(results):
-                try:
-                    pred_results.append(result.result())
-                except Exception as ex:
-                    logger.error(str(ex))
-                    raise ex
-        logger.info(pred_results)
-        #self.__update_status('__train predictors', 'done')
-
-    def train(self):
-        """Train all the models."""
-        self.__update_status('train')
-        # 1. extract data from the global data frame
-        # 2. clean the data* based on particular estimator and its models
-        # 3. split the data into training/test sets
-        # 4. create a model
-        # 5. train the model
-        #    1. when use blending/bagging, need to do more transform on a copied dataset based on particular model requirements.
-        # 6. make predictions
-        # 7. evaluate and improve
-        # 8. save data transform/cleaning and model parameters into database
-
-    def predict_init(self):
-        """Initialize the internal structure for prediction."""
-        self.__update_status('predict init')
-        # 1. load global transformer from db
-        # 2. load all models and their transform/cleaning/model parameters from db
-
-    def predict(self):
-        """Predict the results."""
-        self.__update_status('predict')
-        # 1. preliminary transform*
-        #    1. when has new labels, raise warning for retraining
-        # 2. clean/transform data* based on particular estimator
-        # 3. make estimation
-
-
-def _predictor_train(predictors):
-    train_result = []
-    for predictor in predictors:
-        score = predictor.train()
-        # TODO: save models
-        train_result.append(f'{predictor.name} : {score}')
-    return train_result
+    def __predict(
+        self,
+        id_list: list[str],
+        writeback: bool = False
+    ) -> tuple[pd.DataFrame, list[str]]:
+        """Predict the values for the given list of ids."""
+        df_grouped = self.data_source.load_df_grouped(
+            id_list, self.root_preprocessor)
+        added_cols = []
+        for estimate_manager in self.estimate_managers.values():
+            # estimater type lavel
+            for em in estimate_manager.values():
+                # model level
+                logger.info(
+                    f'-------------predict {em.name} {em.model_name} ----------------------------')
+                df_y, y_col_names = em.estimate(df_grouped)
+                if df_y is None:
+                    continue
+                logger.info(
+                    f"predict {em.name} {em.model_name} {y_col_names}:")
+                logger.info(df_y)
+                logger.info('-----------------------------------------')
+                # merge the prediction to the original data
+                # df_grouped = pd.merge(
+                #     df_grouped, df_y, how='left', left_index=True, right_index=True)
+                df_grouped = self.data_source.writeback(
+                    y_col_names, df_y, df_grouped)
+                added_cols.extend(y_col_names)
+        return df_grouped, added_cols

@@ -10,7 +10,34 @@ from base.util import debug, get_utc_datetime_from_str, getUniqueLabels, print_d
 from datetime import datetime, timedelta
 import pandas as pd
 from transformer.preprocessor import Preprocessor
+from typing import Union
+import os
+
 logger = BaseCfg.getLogger(__name__)
+
+PROV_CITY_TO_AREA = {}
+PROV_CITY_TO_AREA_FILE = 'data/prov_city_to_area.csv'
+
+
+def readProvCityToArea():
+    """Read province-city to area mapping from csv file"""
+    global PROV_CITY_TO_AREA
+    # check file exists
+    if not (os.path.exists(PROV_CITY_TO_AREA_FILE) and os.path.isfile(PROV_CITY_TO_AREA_FILE)):
+        return
+    df = pd.read_csv(PROV_CITY_TO_AREA_FILE)
+    for index, row in df.iterrows():
+        PROV_CITY_TO_AREA[(row['province'], row['city'])] = row['area']
+
+readProvCityToArea()
+
+def writeProvCityToArea():
+    """Write province-city to area mapping to csv file"""
+    df = pd.DataFrame(columns=['province', 'city', 'area'])
+    for key, value in PROV_CITY_TO_AREA.items():
+        df = df.append(
+            {'province': key[0], 'city': key[1], 'area': value}, ignore_index=True)
+    df.to_csv(PROV_CITY_TO_AREA_FILE, index=False)
 
 
 def dateToInt(date):
@@ -136,7 +163,51 @@ class DataSource:
         """Load raw data from mongodb"""
         self.df_raw = read_data_by_query(
             self._query, self.col_list)
+        self._build_prov_city_to_area()
         self._build_scale_tree()
+
+    def _build_prov_city_to_area(self):
+        """Build PROV_CITY_TO_AREA dict from df_raw"""
+        global PROV_CITY_TO_AREA
+        for prov, area, city in self.df_raw[['prov', 'area', 'city']].values:
+            PROV_CITY_TO_AREA[(prov, city)] = area
+        writeProvCityToArea()
+        return PROV_CITY_TO_AREA
+
+    def load_df_grouped(
+        self,
+        id_list: list[str] = None,
+        preprocessor: Preprocessor = None,
+    ) -> pd.DataFrame:
+        """Load new data from mongodb.
+        This function is used to load new data from mongodb for prediction.
+        """
+        global PROV_CITY_TO_AREA
+        query = {'_id': {'$in': id_list}}
+        df_raw_to_predict = read_data_by_query(query, self.col_list)
+        # fill missing area
+        df_raw_to_predict['area'] = df_raw_to_predict.apply(
+            lambda row: PROV_CITY_TO_AREA.get((row['prov'], row['city']), 'Other'), axis=1)
+        logger.info(PROV_CITY_TO_AREA)
+        logger.info(df_raw_to_predict[['prov', 'area', 'city']])
+        df_transformed_to_predict = preprocessor.transform(df_raw_to_predict)
+        # groupby and reindex by EstimateScale
+        df_grouped_to_predict = df_transformed_to_predict.set_index([
+            'saletp-b', 'ptype2-l',
+            'prov', 'area', 'city',
+            '_id',
+        ]).sort_index(
+            level=[0, 1, 2, 3, 4],
+            ascending=[True, True, True, True, True],
+            inplace=False,
+        )
+        return df_grouped_to_predict
+
+    def concat_df_grouped(self, df_grouped: pd.DataFrame):
+        """Concat grouped data with new data.
+        """
+        self.df_grouped = pd.concat(
+            [self.df_grouped, df_grouped], axis=0)
 
     def _build_scale_tree(self):
         """Build scale tree from raw data."""
@@ -179,17 +250,20 @@ class DataSource:
         cols: list[str] = None,
         date_span: int = 180,
         need_raw: bool = False,
-        suffix_list: list[str] = ['-b', '-n', '-c'],
+        suffix_list: list[str] = None,
         copy: bool = False,
         sample_size: int = None,
         filter_func: (pd.Series) = None,
         numeric_columns_only: bool = False,
         prefer_estimated: bool = False,
+        df_grouped: pd.DataFrame = None,
     ):
         """Get dataframe from stored data.
         """
         if date_span is None:
             date_span = 180
+        if suffix_list is None:
+            suffix_list = ['-b', '-n', '-c']
         slices = []
         # filter data by scale and date_span
         # saletp_b
@@ -218,18 +292,25 @@ class DataSource:
         else:
             slices.append(slice(None))
         slices.append(slice(None))
-        rd = self.df_grouped.loc[tuple(slices), :]
-        logger.debug(f'{slices} {len(self.df_grouped.index)}=>{len(rd.index)}')
+        if df_grouped is None:
+            df_grouped = self.df_grouped
+        rd = df_grouped.loc[tuple(slices), :]
+        logger.debug(f'{slices} {len(df_grouped.index)}=>{len(rd.index)}')
+        if len(rd.index) == 0:
+            return None
         # onD:
-        rd = rd.loc[rd.onD.between(
-            dateToInt(scale.datePoint - timedelta(days=date_span)),
-            dateToInt(scale.datePoint)
-        )]
+        if date_span > 0:
+            rd = rd.loc[rd.onD.between(
+                dateToInt(scale.datePoint - timedelta(days=date_span)),
+                dateToInt(scale.datePoint)
+            )]
         logger.debug(
             f'{scale.datePoint-timedelta(days=date_span)}-{scale.datePoint} {len(rd.index)}')
         # filter data by filter_func
         rd = rd.loc[rd.apply(filter_func, axis=1)] if filter_func else rd
         logger.debug(f'after filter_func {len(rd.index)}')
+        if len(rd.index) == 0:
+            return None
         # sample data
         if sample_size is not None and sample_size < rd.shape[0]:
             rd = rd.sample(n=sample_size, random_state=1)
@@ -267,7 +348,7 @@ class DataSource:
     def get_numeric_columns(
         self,
         df: pd.DataFrame,
-        exclude_columns: list[str] = [],
+        exclude_columns: list[str] = None,
         prefer_estimated: bool = False,
     ) -> list[str]:
         """Get the numeric columns
@@ -281,6 +362,8 @@ class DataSource:
             if True, return the estimated value column if it exists,
             and remove the original column.
         """
+        if exclude_columns is None:
+            exclude_columns = []
         numeric_columns = []
         for col in df.columns:
             try:
@@ -304,40 +387,30 @@ class DataSource:
 
     def writeback(
         self,
-        col: str,
-        y: pd.Series,
+        col: Union[str, list[str]],
+        y: Union[pd.Series, pd.DataFrame],
+        df_grouped: pd.DataFrame = None,
     ) -> None:
         """write y to df_grouped
         """
-        if col not in self.df_grouped.columns:
-            self.df_grouped.loc[:, col] = NaN
-        self.df_grouped.loc[y.index, col] = y
-
-    # def writeback(
-    #     self,
-    #     predictor: WriteBackMixin,
-    #     new_col: str,
-    #     scale: EstimateScale,
-    #     cols: list[str],
-    #     date_span: int = 180,
-    #     need_raw: bool = False,
-    #     suffix_list: list[str] = ['-b', '-n', '-c'],
-    #     orig_col: str = None,
-    # ):
-    #     """Writeback dataframe to df_grouped.
-    #     """
-    #     if new_col not in self.df_grouped.columns:
-    #         # need to set dtype as number
-    #         self.df_grouped.loc[:, new_col] = NaN
-    #     # TODO: why only get part of the matched df
-    #     df = self.get_df(
-    #         scale, cols, date_span, need_raw, suffix_list, copy=False)
-    #     y = predictor.get_writeback(df, orig_col)
-    #     logger.debug(
-    #         f'writeback df:{df.shape} y({new_col}):{len(y)} type:{y.dtype}')
-    #     df.loc[:, new_col] = y
-    #     self.df_grouped.update(df.loc[:, new_col])
-    #     # print(self.df_grouped)
+        if df_grouped is None:
+            df_grouped = self.df_grouped
+        yIsSeries = False
+        if isinstance(y, pd.Series):
+            yIsSeries = True
+        if isinstance(col, str):
+            col = [col]
+        if not isinstance(col, list):
+            raise Exception(
+                f'col must be str or list[str], but got {type(col)}')
+        for c in col:
+            if c not in df_grouped.columns:
+                df_grouped.loc[:, c] = NaN
+            if yIsSeries:
+                df_grouped.loc[y.index, c] = y
+            else:
+                df_grouped.loc[y.index, c] = y.loc[:, c]
+        return df_grouped
 
 
 class TrendDataSource:

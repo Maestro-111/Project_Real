@@ -68,7 +68,7 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         df_train, df_test = train_test_split(
             df, test_size=0.15, random_state=10)
         model = self.prepare_model()
-        x_cols, y_col = self.get_x_y_columns(df)
+        x_cols, y_col, x_means = self.get_x_y_columns(df)
         model.fit(df_train[x_cols], df_train[y_col])
         accuracy = self.test_accuracy(
             model, df_test[x_cols], df_test[y_col])
@@ -82,7 +82,7 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         for weight, feature in featureImportance:
             featureImportanceDic[feature] = int(weight)
             self.logger.info(f'{feature}: {weight}')
-        return (scale, model, accuracy, x_cols, {'featureImportance': featureImportanceDic})
+        return (scale, model, accuracy, x_cols, x_means, {'feature_importance': featureImportanceDic})
 
     def feature_importance(self, model) -> list:
         featureZip = list(zip(model.feature_importances_, model.feature_name_))

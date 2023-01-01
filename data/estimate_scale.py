@@ -2,6 +2,7 @@
 import datetime
 from enum import Enum
 import re
+from typing import Union
 from base.base_cfg import BaseCfg
 
 from regex import F, P
@@ -50,9 +51,11 @@ class EstimateScale:
             prov: str = 'ON',
             area: str = None,
             city: str = None,
-            sale: bool = None,
-            meta: dict = {},
+            sale: Union[bool, str] = None,
+            meta: dict = None,
     ):
+        if meta is None:
+            meta = {}
         self.datePoint = datePoint
         self.propType = propType
         self.prov = prov
@@ -83,7 +86,7 @@ class EstimateScale:
             area = None
         if city == '-':
             city = None
-        if sale == 'BothSaleRent' or sale == '-':
+        if sale == 'BothSaleRent' or sale == '-' or sale == 'Both':
             sale = None
         elif sale == 'Sale' or sale == 'S':
             sale = True

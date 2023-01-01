@@ -128,6 +128,11 @@ class MongoDB():
             logger.error('error when save %s', doc)
             logger.error(pymongo.errors.PyMongoError)
 
+    def insertMany(self, collection, docs):
+        if isinstance(collection, str):
+            collection = self.collection(collection)
+        return collection.insert_many(docs)
+
     def rename(self, collection, targetName, dropTarget=False):
         try:
             if isinstance(collection, str):
@@ -163,6 +168,11 @@ class MongoDB():
         except pymongo.errors.PyMongoError:
             logger.error('error when create index to  %s', fields)
             logger.error(pymongo.errors.PyMongoError)
+
+    def hasIndex(self, collectionName, fields):
+        indexes = self.collection(collectionName).index_information()
+        logger.info('hasIndex',indexes)
+        return indexes.get(fields)
 
 
 theMongoDb = MongoDB()

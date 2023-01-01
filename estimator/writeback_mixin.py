@@ -1,4 +1,5 @@
 from base.timer import Timer
+import pandas as pd
 
 
 class WritebackMixin:
@@ -9,7 +10,11 @@ class WritebackMixin:
     Implementations of this class shall override the :meth:`writeback` method. 
     """
 
-    def writeback(self, new_col: str = None) -> int:
+    def writeback(
+        self,
+        new_col: str = None,
+        df_grouped: pd.DataFrame = None,
+    ) -> int:
         """Write back the results to the data source.
 
         Parameters
@@ -23,7 +28,7 @@ class WritebackMixin:
         the number of records written back.
         """
         if new_col is None:
-            new_col = self.y_column + '-e'
+            new_col = self.get_output_column()
         timer = Timer(new_col, self.logger)
         timer.start()
         counter = 0
@@ -31,12 +36,14 @@ class WritebackMixin:
             df = self.load_data(scale=scale)
             # fill missing values with mean
             df.fillna(df.mean())
-            x_cols = scale.meta['x_cols']
-            y = scale.meta['model'].predict(df[x_cols])
+            model_dict = scale.meta[self.__model_key__()]
+            x_cols = model_dict['x_cols']
+            y = model_dict['model'].predict(df[x_cols])
             df[new_col] = y
             self.data_source.writeback(
                 col=new_col,
                 y=df[new_col],
+                df_grouped=df_grouped,
             )
             counter += len(y)
         timer.stop(counter)

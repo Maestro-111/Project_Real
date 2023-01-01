@@ -27,6 +27,8 @@ org.train_models()
 
 org.save_models()
 
+org.predict(['TRBW5841870'])
+
 # ----------------------------------------------------------
 # start testing below
 
@@ -41,12 +43,39 @@ sqft.train()
 sold = SoldPriceLgbmEstimateManager(org.data_source)
 sold.train()
 
-
+# -------------------
 ds = org.data_source
+df = ds.load_df_grouped(['TRBW5841870'],org.root_preprocessor)
+ds.prov_city_to_area = {('ON','Mississauga'):'Peel'}
 
-em = RmBaseEstimateManager(ds, 'emTest')
+df['_id']
+
+from data.data_source import read_data_by_query
+df = read_data_by_query({'_id':{'$in':['TRBW5841870']}}, ds.col_list)
+print('prov' in df.columns)
+print(df['prov'])
+
+df.apply(lambda row: print(row['city']) , axis=1)
+df.apply(lambda row: print((row['prov'],row['city'])) , axis=1)
+(df.loc[0,'prov'],df.loc[0,'city'])
+print(ds.prov_city_to_area[(df['prov'],df['city'])])
+
+trans = org.root_preprocessor.customTransformer.transFunctionsByName_['fce_x'][1]
+trans.fit(ds.df_raw)
+df_raw = ds.df_raw
+Xs = df_raw['fce'].apply(lambda x: trans.map_.get(x,x))
+Xs1 = Xs.explode(ignore_index=False)
+Xs1
+
+col_labels = Xs1.value_counts()
+col_labels.index = col_labels.index.astype(str)
+col_labels = col_labels.sort_values(ascending=False)
 
 
+
+
+
+# test built year
 def needBuiltYear(row):
     return not (row['bltYr-n'] is None or isnan(row['bltYr-n']))
 
@@ -103,10 +132,15 @@ a.b
 
 print(hasattr(a, 'b'))
 
-df1 = pd.DataFrame([[1, 2, 0], [4, 5, 0], [7, 8, 0], [0, 0, 0]],
+df1 = pd.DataFrame([[1, 2, 0], [4, 5, 0], [7, 8, 0], [7, 0, 0]],
                    index=['cobra', 'viper', 'sidewinder', 'zero'],
                    columns=['max_speed', 'shield', 'zzz'])
-df1['zzz']
+labels = df1['max_speed'].value_counts()
+labels.index = labels.index.astype(str)
+labels = labels.sort_index()
+
+for i,c in labels.items():
+  print(f'{i}=>{c}')
 
 tuples = [
     ('cobra', 'mark i'), ('cobra', 'mark ii'),

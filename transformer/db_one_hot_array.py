@@ -11,6 +11,8 @@ from base.const import SAVE_LABEL_TO_DB, Mode
 
 logger = BaseCfg.getLogger(__name__)
 
+# TODO: mapping all combinations of array values to one output column as int.
+
 
 class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
     """One hot encoding for field of string array.
@@ -20,7 +22,7 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
     col: str
         the source column
     map: dict
-        the mapping from original string to new feature string. It may be an N to 1 mapping.
+        the mapping from original string to new feature string. It may be an N to 1 or 1 to N mapping.
     collection : mongodb collection or None
         The mongodb collection to save the mapping to. When a collection name is provided, transformer will generate a category column ended -c.
     col: str
@@ -36,12 +38,10 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
         col: str,
         map: dict = None,
         sufix: str = '-b',
-        collection: str = None,
-        mode: Mode = Mode.TRAIN,
         na_value=None,
-        save_to_db: bool = SAVE_LABEL_TO_DB,
+        collection: str = None,
     ):
-        super().__init__(collection, col, mode, na_value, save_to_db)
+        super().__init__(col, na_value, collection, )
         self.sufix = sufix
         self.map = map
 
@@ -50,20 +50,17 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
             return self._target_cols
         retSet = set()
         # category column
-        if self.collection is None:
-            self.col_category = None
-        else:
-            logger.debug(f'fit {self.col} save label to db')
-            self.col_category = self.col+'-c'
-        if self.col_category is not None:
-            retSet.add(self.col_category)
+        self.col_category = self.col+'-c'
+        retSet.add(self.col_category)
         # feature columns
         if self.map is not None:
             self.map_ = {}
             for (x, y) in self.map.items():
                 if isinstance(y, list):
+                    x_target_cols = []
                     for v in y:
-                        self.map_[x] = self._new_col_name(v)
+                        x_target_cols.append(self._new_col_name(v))
+                    self.map_[x] = x_target_cols
                 elif isinstance(y, str):
                     self.map_[x] = self._new_col_name(y)
                 else:
@@ -73,10 +70,8 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
         for v in self.map_.values():
             if isinstance(v, list):
                 for vv in v:
-                    # retSet.add(self.col+'-'+vv)
                     retSet.add(vv)
             elif isinstance(v, str):
-                # retSet.add(self.col+'-'+v)
                 retSet.add(v)
         self._target_cols = list(retSet)
         return self._target_cols
@@ -114,15 +109,16 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
         if self.map is None:
             logger.debug(f'fit {self.col} build map')
             col_index = X[self.col].value_counts().index
+            # TODO: support array?
             col_values = [v + self.sufix for v in col_index]
             self.map_ = dict(zip(col_index, col_values))
 
-        if self.collection is not None:
-            Xs = X[self.col].apply(lambda x: self.map_.get(x, x))
-            super().fit(Xs, y)
-            # print('self getattr labels-', getattr(self, 'labels-', 'None'))
-            # print(f'self.col {self.col} in self.labels-',
-            #       (self.col not in self.labels_))
+        Xs = X[self.col].explode(ignore_index=False).apply(lambda x: self.map_.get(
+            x, x)).explode(ignore_index=False)
+        super().fit(Xs, y)
+        # print('self getattr labels-', getattr(self, 'labels-', 'None'))
+        # print(f'self.col {self.col} in self.labels-',
+        #       (self.col not in self.labels_))
 
         self._target_cols = None
         self.n_cols_ = len(self.get_feature_names_out())
@@ -172,26 +168,42 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
                 self._errors[value] = 1
                 logger.error(f'{self.col} {value} {type(value)} not in map')
 
-        # set value column(s)
-        for i, row in X.iterrows():
-            value = row[self.col]
-            if isinstance(value, list):
-                for v in value:
-                    _set_value(v, i)
-                    list_value_count += 1
-            elif isinstance(value, str):
-                _set_value(value, i)
-                str_value_count += 1
-            elif isNanOrNone(value):
-                continue
-            else:
-                logger.error(f'{self.col} {value} {type(value)} not in map')
-                error_count += 1
+        if self.col in X.columns:
+            # set value column(s)
+            for i, row in X.iterrows():
+                value = row[self.col]
+                if isinstance(value, list):
+                    for v in value:
+                        _set_value(v, i)
+                        list_value_count += 1
+                elif isinstance(value, str):
+                    _set_value(value, i)
+                    str_value_count += 1
+                elif isNanOrNone(value):
+                    continue
+                else:
+                    logger.error(
+                        f'{self.col} {value} {type(value)} not in map')
+                    error_count += 1
 
-        # set category column
-        if self.col_category is not None:
-            Xs = X[self.col].apply(lambda x: self.map.get(x, x))
-            X.loc[:, self.col_category] = super().transform(Xs)
+            # set category column
+            if self.col_category is not None:
+                def _get_category(value):
+                    ret = []
+                    if isinstance(value, list):
+                        return [self.map_.get(v, v) for v in value]
+                    elif isinstance(value, str):
+                        return self.map_.get(value, value)
+                    elif isNanOrNone(value):
+                        return None
+                    else:
+                        logger.error(
+                            f'{self.col} {value} {type(value)} not in map')
+                        return None
+                Xs = X[self.col].apply(_get_category)
+                X.loc[:, self.col_category] = super().transform(Xs)
+        else:
+            logger.error(f'{self.col} not in X')
 
         logger.info(
             f'{self.col} list:{list_value_count} str:{str_value_count} error:{error_count}')

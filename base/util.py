@@ -165,3 +165,17 @@ def debug(fn):
 
 def columnValues(df: pd.DataFrame, col: str) -> list:
     return df[col].unique().tolist()
+
+
+def getRoundFunction(n=1):
+    def roundByN(value):
+        if isnan(value):
+            return value
+        return int(round(value / n) * n)
+    return roundByN
+
+
+def roundByN(value, n=1):
+    if isnan(value):
+        return value
+    return int(round(value / n) * n)

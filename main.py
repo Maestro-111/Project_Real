@@ -3,6 +3,11 @@ os.environ['DEBUG'] = 'True'
 os.environ["RMBASE_FILE_PYTHON"] = "/Users/fred/work/cfglocal/built/base.py"
 print(os.environ['RMBASE_FILE_PYTHON'])
 
+import datetime
+now = datetime.datetime.now()
+print ("Current date and time : ")
+print (now.strftime("%Y-%m-%d %H:%M:%S"))
+
 from data.data_source import read_data_by_query
 import numpy as np
 import pandas as pd
@@ -18,6 +23,8 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 logging.debug("test")
 
+timer = Timer('Overall',logger)
+timer.start()
 
 org = Organizer()
 org.load_data()
@@ -27,18 +34,33 @@ org.train_models()
 
 org.save_models()
 
+now = datetime.datetime.now()
+print ("Current date and time : ")
+print (now.strftime("%Y-%m-%d %H:%M:%S"))
+
 df, a_cols = org.predict([
     'TRBW5841870', 'TRBW5841549', 'TRBW5840562', 'DDF25100869', 'TRBX5810806',  # Mississauga
-    'TRBC5841835', 'TRBC5841873', 'TRBE5841152', 'TRBE5840727', 'TRBC5841124',  # Toronto
-    'TRBN5841327', 'DDF25052539', 'TRBN5841525', 'TRBN5840799', 'TRBN5841438',  # Markham
-    'TRBW5841599', 'TRBW5841869', 'TRBW5841824', 'TRBW5840755', 'TRBW5840758',  # Oakville
-    'TRBW5840555', 'TRBW5841859', 'TRBW5841673', 'TRB40323381', 'TRB40297792',  # Brampton
+#    'TRBC5841835', 'TRBC5841873', 'TRBE5841152', 'TRBE5840727', 'TRBC5841124',  # Toronto
+#    'TRBN5841327', 'DDF25052539', 'TRBN5841525', 'TRBN5840799', 'TRBN5841438',  # Markham
+#    'TRBW5841599', 'TRBW5841869', 'TRBW5841824', 'TRBW5840755', 'TRBW5840758',  # Oakville
+#    'TRBW5840555', 'TRBW5841859', 'TRBW5841673', 'TRB40323381', 'TRB40297792',  # Brampton
 ])
 a_cols.append('lp-n')
-df[a_cols]
+print(df[a_cols])
+#print(df[a_cols].to_dict(orient='index'))
+
+timer.stop(org.data_source.df_raw.shape[0])
+
+now = datetime.datetime.now()
+print ("Current date and time : ")
+print (now.strftime("%Y-%m-%d %H:%M:%S"))
 
 
-df['onD-week-non', 'D-season-n']
+
+
+org.data_source.df_raw.shape[0]
+
+df['onD-week-n', 'onD-season-n']
 for col in a_cols:
     if col in df.columns:
         print(df[col])
@@ -304,7 +326,19 @@ org.train_predictors()
 str(20120312)
 
 
-df = pd.DataFrame({'points': [14, 19, 9, 21, 25, 29, 20, 11],
-                   'assists': [5, 7, 7, 9, 12, 9, 9, 4],
-                   'rebounds': [11, 8, 10, 6, 6, 5, 9, 12]})
-df.mean(axis=0)
+df = pd.DataFrame({'points': [14, 19, 9, 21, 25, 29, 20, 0,11],
+                   'assists': [5, 7, 7, 9, 12, 9, 9, None,4],
+                   'rebounds': [11, 8, 10, 6, 6, 5, 9,4, 12]})
+points = df['points']
+print(df)
+def fround(v):
+  if isnan(v):
+    return v
+  return int(round(v / 5) * 5)
+print(points.map(fround))
+print(points)
+
+df.to_dict(orient='index')
+
+t = (1,2,3)
+print( t[2])

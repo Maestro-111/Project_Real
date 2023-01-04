@@ -15,6 +15,7 @@ class SoldPriceLgbmEstimateManager(LgbmEstimateManager):
     """SoldPrice estimate manager."""
 
     y_target_col = 'saleprice-n-e'
+    y_db_col = 'saleprice_m1'
     y_column = 'sp-n'
     x_columns = [
         'lp-n',
@@ -32,6 +33,7 @@ class SoldPriceLgbmEstimateManager(LgbmEstimateManager):
         'sqft', 'bltYr',
         'park_fac',
     ]
+    roundBy = 1000
 
     def __init__(self, data_source):
         super().__init__(

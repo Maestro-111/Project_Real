@@ -21,6 +21,10 @@ CITY_COUNT_THRESHOLD = 1000
 TRAINING_MIN_ROWS = 200
 
 
+MODEL_TYPE_CLASSIFICATION = 'classification'
+MODEL_TYPE_REGRESSION = 'regression'
+
+
 class COLUMN_SUFFIX(Enum):
     NUMBER_CAT = '-c'
     BINARY = '-b'

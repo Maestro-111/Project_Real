@@ -3,7 +3,6 @@
 import time
 from base.base_cfg import BaseCfg
 from numpy import NaN
-from predictor.writeback_mixin import WriteBackMixin
 from data.estimate_scale import EstimateScale
 from base.mongo import MongoDB
 from base.util import debug, get_utc_datetime_from_str, getUniqueLabels, isNanOrNone, print_dateframe
@@ -36,6 +35,13 @@ def readProvCityToArea():
 
 
 readProvCityToArea()
+
+
+def setCounterToZero():
+    """Set counter to zero"""
+    global PROV_CITY_TO_AREA_COUNT
+    for key in PROV_CITY_TO_AREA_COUNT.keys():
+        PROV_CITY_TO_AREA_COUNT[key] = 0
 
 
 def calcProvCityToAreaDF(write_to_file: bool = False):
@@ -111,6 +117,41 @@ def read_data_by_query(
     logger.info(
         f'Result data shape:{result.shape}; used: {end_time - start_time}s')
     return result
+
+
+def update_records(
+    df: pd.DataFrame,
+    col_list: list[str],
+    db_col_list: list[str],
+    id_index: int = 5,
+    mongodb: MongoDB = None,
+):
+    if mongodb is None:
+        mongodb = MongoDB()
+    start_time = time.time()
+    not_none_db_col_list = []
+    to_save_col_list = []
+    for i, col in enumerate(db_col_list):
+        if col is not None:
+            not_none_db_col_list.append(col)
+            to_save_col_list.append(col_list[i])
+    if len(not_none_db_col_list) == 0:
+        logger.warning('No columns to save')
+        return
+    df = df[to_save_col_list].copy()
+    df.columns = not_none_db_col_list
+    data_to_save = df.to_dict(orient='index')
+    for key, value in data_to_save.items():
+        id = key[id_index]
+        # logger.debug(f'Updating key: {key} , id: {id}')
+        mongodb.updateOne(
+            'properties',
+            {'_id': id},
+            {'$set': value}
+        )
+    end_time = time.time()
+    logger.info(
+        f'Saved {df.shape[0]} rows, used: {end_time - start_time}s')
 
 
 class DataSource:
@@ -209,7 +250,7 @@ class DataSource:
         """Build PROV_CITY_TO_AREA dict from df_raw"""
         global PROV_CITY_TO_AREA, PROV_CITY_TO_AREA_COUNT
         # reset global dict count to empty
-        PROV_CITY_TO_AREA_COUNT = {}
+        setCounterToZero()
         for prov, area, city in self.df_raw[['prov', 'area', 'city']].values:
             if isinstance(area, str) and area != '' and isinstance(city, str) and city != '' and isinstance(prov, str) and prov != '':
                 if PROV_CITY_TO_AREA_COUNT.get((prov, city), 0) == 0:
@@ -221,6 +262,8 @@ class DataSource:
                         if PROV_CITY_TO_AREA_COUNT[(prov, city)] < 10:
                             # change to conflict if conflict count < 10
                             PROV_CITY_TO_AREA[(prov, city)] = area
+                            # reset conflict count to 1
+                            PROV_CITY_TO_AREA_COUNT[(prov, city)] = 1
                             change = True
                         if PROV_CITY_TO_AREA_COUNT[(prov, city)] < 100:
                             # only log conflict if conflict count < 100
@@ -296,7 +339,7 @@ class DataSource:
         If raw data is not loaded, load it first.
         Args:
             preprocessor (Preprocessor, optional): Defaults to None.
-                provide fit_transform method to transform df_raw to df_transformed. 
+                provide fit_transform method to transform df_raw to df_transformed.
 
         Returns:
             DataFrame: transformed DataFrame.
@@ -463,6 +506,7 @@ class DataSource:
         col: Union[str, list[str]],
         y: Union[pd.Series, pd.DataFrame],
         df_grouped: pd.DataFrame = None,
+        db_col: Union[str, list[str]] = None,
     ) -> None:
         """write y to df_grouped
         """
@@ -483,6 +527,18 @@ class DataSource:
                 df_grouped.loc[y.index, c] = y
             else:
                 df_grouped.loc[y.index, c] = y.loc[:, c]
+        if db_col is not None:
+            if isinstance(db_col, str):
+                db_col = [db_col]
+            elif isinstance(db_col, list):
+                if len(db_col) != len(col):
+                    raise Exception(
+                        f'len(db_col) must be equal to len(col), but got {len(db_col)} and {len(col)}')
+            else:
+                raise Exception(
+                    f'db_col must be str or list[str], but got {type(db_col)}')
+            update_records(df_grouped, col_list=col,
+                           db_col_list=db_col, id_index=5)
         return df_grouped
 
 
@@ -507,7 +563,7 @@ class TrendDataSource:
         soldDomAvg, soldDomMedian,
         offDomAvg, offDomMedian,
         startAvgPrice, endAvgPrice, priceDiffAvg,
-        startMedianPrice, endMedianPrice, priceDiffMedian, 
+        startMedianPrice, endMedianPrice, priceDiffMedian,
         pcPerNewAvg, priceChangePerNewMedian,
         priceSoldPerAsk, priceChangedPercent, priceChanged,
     date features:

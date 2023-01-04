@@ -1,18 +1,17 @@
 from datetime import datetime
 from enum import Enum
 from math import isnan
+from typing import Union
 from base.base_cfg import BaseCfg
+from base.const import MODEL_TYPE_CLASSIFICATION, MODEL_TYPE_REGRESSION
 from base.model_store import ModelStore
+from base.util import getRoundFunction
 from data.data_source import DataSource
 import pandas as pd
+import numpy as np
 from sklearn.metrics import explained_variance_score, accuracy_score, r2_score
 
 from data.estimate_scale import EstimateScale
-
-
-class ModelClass(Enum):
-    Regression = 'Regression'
-    Classification = 'Classification'
 
 
 class RmBaseEstimateManager:
@@ -45,7 +44,7 @@ class RmBaseEstimateManager:
         self,
         data_source: DataSource,
         name: str = None,
-        model_class: ModelClass = ModelClass.Regression,
+        model_class: str = MODEL_TYPE_REGRESSION,
     ) -> None:
         self.data_source = data_source
         self.name = name
@@ -111,7 +110,10 @@ class RmBaseEstimateManager:
     def get_output_column(self) -> str:
         return getattr(self, 'y_target_col', (self.y_column + '-e'))
 
-    def estimate(self, df_grouped: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    def get_writeback_db_column(self) -> str:
+        return getattr(self, 'y_db_col', None)
+
+    def estimate(self, df_grouped: pd.DataFrame) -> tuple[pd.DataFrame, list[str], list[str]]:
         """Estimate the data source.
         Either train or load must be called before this.
         """
@@ -120,24 +122,30 @@ class RmBaseEstimateManager:
                 df_grouped=df_grouped, scale=scale)
         elif hasattr(self, 'scales'):
             df_y_list = []
-            y_cols_set = set()
+            y_cols_list = []
+            y_db_cols_list = []
             for scale in self.scales.values():
-                df_y, y_cols = self.estimate_single_scale(
+                df_y, y_cols, y_db_cols = self.estimate_single_scale(
                     df_grouped=df_grouped, scale=scale)
                 if df_y is not None:
                     df_y_list.append(df_y)
-                    y_cols_set.update(y_cols)
+                    y_cols_list.extend(y_cols)
+                    y_db_cols_list.extend(y_db_cols)
             if len(df_y_list) > 0:
                 df_y = pd.concat(df_y_list)
-                return df_y, list(y_cols_set)
+                return df_y, y_cols_list, y_db_cols_list
             else:
-                return None, None
+                return None, None, None
         else:
             self.logger.error(
                 'No scale or scales defined.')
             raise Exception('No scale or scales defined.')
 
-    def estimate_single_scale(self, df_grouped: pd.DataFrame, scale: EstimateScale) -> tuple[pd.DataFrame, list[str]]:
+    def estimate_single_scale(
+        self,
+        df_grouped: pd.DataFrame,
+        scale: EstimateScale
+    ) -> tuple[pd.DataFrame, list[str], list[str]]:
         """Estimate the data source for a single scale.
         This method is called by estimate method.
         """
@@ -148,12 +156,12 @@ class RmBaseEstimateManager:
         df = self.load_data(df_grouped=df_grouped,
                             scale=filterScale, date_span=-1)
         if df is None or df.empty:
-            return None, None
+            return None, None, None
         key = self.__model_key__()
         if key not in scale.meta:
             self.logger.warning(
                 f'No model found for scale {scale}.')
-            return None, None
+            return None, None, None
         model_dict = scale.meta[key]
         model = model_dict['model']
         x_cols = model_dict['x_cols']
@@ -165,10 +173,19 @@ class RmBaseEstimateManager:
             df[col] = x_means[col]
         self.logger.info(df.head())
         y = model.predict(df[x_cols])
+        if self.model_class == MODEL_TYPE_REGRESSION:
+            y = self.round_result(y)
+        self.logger.info(
+            f'Estimation result: {y} MODEL CLASS {self.model_class}')
         y_target_col = self.get_output_column()
         df[y_target_col] = y
         df[y_target_col+'-acu'] = model_dict['accuracy']
-        return (df.loc[:, [y_target_col, y_target_col+'-acu']], [y_target_col, y_target_col+'-acu'])
+        y_db_col = self.get_writeback_db_column()
+        if y_db_col is not None:
+            y_db_cols = [y_db_col, y_db_col+'_acu']
+        else:
+            y_db_cols = [None, None]
+        return (df.loc[:, [y_target_col, y_target_col+'-acu']], [y_target_col, y_target_col+'-acu'], y_db_cols)
 
     def save(self, store: ModelStore) -> None:
         """Save the estimator(s).
@@ -329,17 +346,30 @@ class RmBaseEstimateManager:
 
     def test_accuracy(self, model, X_test, y_test) -> float:
         """Calculate the accuracy of the model."""
-        y_pred = model.predict(X_test)
+        y_pred = self.round_result(model.predict(X_test))
         self.pred_accuracy_score = round(
             self.get_score(y_test, y_pred) * 10000)
         return self.pred_accuracy_score
 
+    def round_result(self, y_pred: Union[pd.Series, pd.DataFrame, np.ndarray], col: str = None):
+        fnRound = getRoundFunction(getattr(self, 'roundBy', 1))
+        if isinstance(y_pred, pd.Series):
+            y_pred = y_pred.map(fnRound)
+        elif isinstance(y_pred, pd.DataFrame):
+            y_pred[col] = y_pred[col].map(fnRound)
+        elif isinstance(y_pred, np.ndarray):
+            fnRound = np.vectorize(fnRound)
+            y_pred = fnRound(y_pred)
+        else:
+            raise ValueError(f'Unknown type: {type(y_pred)}')
+        return y_pred
+
     def get_score(self, y_true, y_pred) -> float:
         """Get the accuracy score."""
         pred_accuracy_score = 0
-        if self.model_class == ModelClass.Classification:
+        if self.model_class == MODEL_TYPE_CLASSIFICATION:
             pred_accuracy_score = accuracy_score(y_true, y_pred)
-        elif self.model_class is None or self.model_class == ModelClass.Regression:
+        elif (self.model_class is None) or (self.model_class == MODEL_TYPE_REGRESSION):
             pred_accuracy_score = r2_score(y_true, y_pred)
         else:
             self.logger.error(

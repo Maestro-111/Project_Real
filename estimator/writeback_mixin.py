@@ -14,6 +14,7 @@ class WritebackMixin:
         self,
         new_col: str = None,
         df_grouped: pd.DataFrame = None,
+        db_col: str = None,
     ) -> int:
         """Write back the results to the data source.
 
@@ -29,6 +30,8 @@ class WritebackMixin:
         """
         if new_col is None:
             new_col = self.get_output_column()
+        if db_col is None:
+            db_col = self.get_writeback_db_column()
         timer = Timer(new_col, self.logger)
         timer.start()
         counter = 0
@@ -50,6 +53,7 @@ class WritebackMixin:
                 col=new_col,
                 y=df[new_col],
                 df_grouped=df_grouped,
+                db_col=db_col,
             )
             counter += len(y)
         timer.stop(counter)

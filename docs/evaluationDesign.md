@@ -13,12 +13,16 @@ Baseline is calculated on both average and median, and a standard deviation for 
 - Type of building(tp) in the city: Detached, Semi-detached, Townhouse, Apartment
 - Features for each type of building in the city: [Feature list](#feature-list)
 
+**Note:** Numbers to save: mean, std, cnt
+
 A delta(price difference) is calculated for each of the following:
 
 - Community baseline to the city baseline
 - Type of building baseline to the city baseline
 - Each feature value to the feature baseline in the city level: [Feature list](#feature-list)
 - Each feature value to the feature baseline on the type of building in city level: [Feature list](#feature-list)
+
+**Note:** Numbers to save: delta, std, cnt
 
 Every community, type of building will be assigned a numeric value based on its delta on thousand dollars. For features with discrete values, feature value will be mapped to a new numeric value based on its delta on thousand dollars. The new numeric value will be used to replace the original value in the data.
 For example, if the delta of a feature value is 2 and average value is 1.5, the feature delta for value 2 is 5 thousand dollars, the mapping ratio will be 5/(2-1.5) = 5/0.5 = 10. The new numeric value will be (2-1.5)\*10 = 5. The ratio will be the average of all the delta of the training set for the feature value.
@@ -52,6 +56,9 @@ The mappings, ratio and standard deviation(s) will be saved for each feature.
 \*1 discrete values
 \*2 based to the feature baseline of the city and type of building
 
+**Note:** Numbers to save: toCity(delta, std, cnt), toType(delta, std, cnt).
+For discrete values, the mapping will be saved. For continues values, the ratio will be saved.
+
 ### 1.2 Evaluation based on features
 
 Each property is evaluated based on the delta of each feature value to the feature baseline. The evaluation is calculated by the following formula:
@@ -61,7 +68,11 @@ Each property is evaluated based on the delta of each feature value to the featu
 
 ### 1.3 Weight of each feature
 
-Linear regression is used to calculate the weight of each feature. X will be the feature evaluation, and Y will be the sold price difference. The weight of each feature will be the coefficient of the feature evaluation.
+Linear regression is used to calculate the weight of each feature. X will be the feature evaluation, and Y will be the sold price. The weight of each feature will be the coefficient of the feature evaluation. An overall evaluation is calculated by the following formula:
+
+    evaluation = type baseline + sum(feature evaluation * feature weight)
+
+LightGBM is used to calculate the final price prediciton. X will be all the feature and overall evaluation, and Y will be the sold price.
 
 [coefficient calculation](https://stackoverflow.com/questions/38250707/calculate-coefficients-in-a-multivariate-linear-regression)
 [sklearn](https://datatofish.com/multiple-linear-regression-python/)

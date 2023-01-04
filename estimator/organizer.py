@@ -22,17 +22,12 @@ from base.timer import Timer
 from base.util import dateFromNum
 import numpy as np
 import pandas as pd
-from predictor.rent_value import RentValue, RentValueEstimator
-from predictor.value import Value, ValueEstimator
-from predictor.writeback_mixin import WriteBackMixin
 import psutil
 from base.base_cfg import BaseCfg
 from base.const import CONCURRENT_PROCESSES_MAX, DEFAULT_DATE_POINT_DATE, DEFAULT_START_DATA_DATE, Mode
 from base.mongo import MongoDB
 from base.model_gridfs_store import GridfsStore
 from base.sysDataHelpers import setSysdataTs
-from predictor.built_year import BuiltYear, BuiltYearEstimator
-from predictor.sqft import Sqft, SqftEstimator
 from data.data_source import DataSource
 from data.estimate_scale import EstimateScale, PropertyType
 from transformer.preprocessor import Preprocessor
@@ -70,8 +65,8 @@ class Organizer:
             datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
             propType=None,  # PropertyType.DETACHED,
             prov='ON',
-            area=None,
-            city=None,
+            area='Peel',
+            city='Mississauga',
             sale=None,
         )
         self.default_sale_scale = EstimateScale(
@@ -169,7 +164,11 @@ class Organizer:
         # TODO: load models from database
         pass
 
-    def predict(self, id_list: list[str], writeback: bool = False):
+    def predict(
+        self,
+        id_list: list[str],
+        writeback: bool = False
+    ) -> tuple[pd.DataFrame, list[str], list[str]]:
         """Predict the values for the given list of ids."""
         self.__update_status('predict', 'run')
         if self.data_source is None:
@@ -178,10 +177,11 @@ class Organizer:
             self.init_transformers()
         if not self.estimate_managers:
             self.load_models()
-        df_grouped_result, added_cols = self.__predict(id_list, writeback)
+        df_grouped_result, added_cols, db_cols = self.__predict(
+            id_list, writeback)
         # self.__predict_parallel(id_list)
         self.__update_status('predict', 'done')
-        return df_grouped_result, added_cols
+        return df_grouped_result, added_cols, db_cols
 
     def __predict(
         self,
@@ -192,13 +192,14 @@ class Organizer:
         df_grouped = self.data_source.load_df_grouped(
             id_list, self.root_preprocessor)
         added_cols = []
+        db_cols = []
         for estimate_manager in self.estimate_managers.values():
             # estimater type lavel
             for em in estimate_manager.values():
                 # model level
                 logger.info(
                     f'-------------predict {em.name} {em.model_name} ----------------------------')
-                df_y, y_col_names = em.estimate(df_grouped)
+                df_y, y_col_names, y_db_col_names = em.estimate(df_grouped)
                 if df_y is None:
                     continue
                 logger.info(
@@ -209,6 +210,11 @@ class Organizer:
                 # df_grouped = pd.merge(
                 #     df_grouped, df_y, how='left', left_index=True, right_index=True)
                 df_grouped = self.data_source.writeback(
-                    y_col_names, df_y, df_grouped)
+                    col=y_col_names,
+                    y=df_y,
+                    df_grouped=df_grouped,
+                    db_col=y_db_col_names,
+                )
                 added_cols.extend(y_col_names)
-        return df_grouped, added_cols
+                db_cols.extend(y_db_col_names)
+        return df_grouped, added_cols, db_cols

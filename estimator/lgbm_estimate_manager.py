@@ -1,7 +1,7 @@
-from base.const import TRAINING_MIN_ROWS
+from base.const import MODEL_TYPE_REGRESSION, TRAINING_MIN_ROWS
 from base.timer import Timer
 from data.estimate_scale import EstimateScale
-from estimator.rmbase_estimate_manager import ModelClass, RmBaseEstimateManager
+from estimator.rmbase_estimate_manager import RmBaseEstimateManager
 import lightgbm as lgb
 import pandas as pd
 from math import isnan
@@ -30,7 +30,7 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         super().__init__(
             data_source,
             name,
-            model_class=ModelClass.Regression,
+            model_class=MODEL_TYPE_REGRESSION,
         )
         self.model_params = model_params
 

@@ -15,6 +15,7 @@ class RentLgbmManager(LgbmEstimateManager):
     """Rent estimate manager."""
 
     y_target_col = 'rent-n-e'
+    y_db_col = 'rent_m1'
     y_column = 'sp-n'
     # x_columns = [
     #     'lat', 'lng',
@@ -42,6 +43,7 @@ class RentLgbmManager(LgbmEstimateManager):
         'sqft', 'bltYr',
         'park_fac',
     ]
+    roundBy = 100
 
     def __init__(self, data_source):
         super().__init__(

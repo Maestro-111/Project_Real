@@ -85,12 +85,15 @@ class MongoDB():
         retUpdate['$set']['_mt'] = datetime.datetime.utcnow()
         return retUpdate
 
-    def updateOne(self, collection, query, update, upsert):
+    def updateOne(self, collection, query, update, upsert=None):
         # save to mongo
         update = self.appendMt(update)
         logger.debug(update)
         if isinstance(collection, str):
             collection = self.collection(collection)
+        if upsert is None:
+            upsert = False
+        #print('updateOne', query, update, upsert)
         collection.update_one(query, update, upsert)
 
     def update(self, collection, query, update, upsert):
@@ -171,7 +174,7 @@ class MongoDB():
 
     def hasIndex(self, collectionName, fields):
         indexes = self.collection(collectionName).index_information()
-        logger.info('hasIndex',indexes)
+        logger.info('hasIndex', indexes)
         return indexes.get(fields)
 
 

@@ -17,6 +17,7 @@ class ValueLgbmEstimateManager(LgbmEstimateManager, WritebackMixin):
     """Value estimate manager."""
 
     y_target_col = 'value-n-e'
+    y_db_col = 'value_m1'
     y_column = 'sp-n'
     x_columns = [
         'onD',
@@ -33,6 +34,7 @@ class ValueLgbmEstimateManager(LgbmEstimateManager, WritebackMixin):
         'sqft', 'bltYr',
         'park_fac',
     ]
+    roundBy = 1000
 
     def __init__(self, data_source):
         super().__init__(

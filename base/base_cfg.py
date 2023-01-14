@@ -29,7 +29,9 @@ class BaseCfg():
     @staticmethod
     def getLogger(name):
         if BaseCfg.rootLogger is None:
-            BaseCfg.rootLogger = logging.getLogger()
+            logging.basicConfig()  # level=logging.NOTSET)
+            logging.root.setLevel(logging.NOTSET)
+            BaseCfg.rootLogger = logging.root  # getLogger()
             if BaseCfg.isDebug():
                 BaseCfg.rootLogger.setLevel(logging.DEBUG)
             BaseCfg.rootLogger.debug("root logger created")

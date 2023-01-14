@@ -55,10 +55,12 @@ def allTypeToFloat(value):
             return None
         return value
     if v_type is str:
-        int_array = re.findall(r'\d+(?:\.\d+)?', value)
-        value = ''.join(int_array)
+        num_array = re.findall(r'\d+(?:\.\d+)?', value)
+        value = ''.join(num_array)
         if len(value) > 0:
-            return float(value)
+            if value.isnumeric():
+                return float(value)
+            return float(num_array[0])
     if v_type is list:
         return allTypeToFloat(value[0])
     return None

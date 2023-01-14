@@ -68,36 +68,40 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
         totalCount = 0
         for col in self.get_feature_names_out():
             X[col] = 0
-        for index, rms in X.loc[:, 'rms'].items():
-            totalCount += 1
-            if not isinstance(rms, list):
-                if isnan(rms):
-                    nanCount += 1
-                    continue
-                logger.warning(f'rms is not list: {rms}')
-                continue
-            totalSize = 0
-            totalArea = 0
-            for rm in rms:
-                if not isinstance(rm, dict):
-                    if isnan(rm):
+        if 'rms' not in X.columns:
+            logger.warning('rms not in X.columns')
+            X['rms'] = [None for _ in range(len(X))]
+        else:
+            for index, rms in X.loc[:, 'rms'].items():
+                totalCount += 1
+                if not isinstance(rms, list):
+                    if isnan(rms):
+                        nanCount += 1
                         continue
-                    logger.warning(f'rm is not dict: {rm} {type(rm)}')
+                    logger.warning(f'rms is not list: {rms}')
                     continue
-                t = rm.get('t', None)
-                if t is not None:
-                    w = rm.get('w', 0) or 0
-                    h = rm.get('h', 0) or 0
-                    if self.masterReg.match(t):
-                        X.loc[index, 'rms-p_size-n'] = w + h
-                        X.loc[index, 'rms-p_area-n'] = w * h
-                        totalSize += w + h
-                        totalArea += w * h
-                    elif self.bedroomReg.match(t) and getLevel(rm.get('l', 1)) >= 1:
-                        totalSize += w + h
-                        totalArea += w * h
-            X.loc[index, 'rms-t_size-n'] = totalSize
-            X.loc[index, 'rms-t_area-n'] = totalArea
+                totalSize = 0
+                totalArea = 0
+                for rm in rms:
+                    if not isinstance(rm, dict):
+                        if isnan(rm):
+                            continue
+                        logger.warning(f'rm is not dict: {rm} {type(rm)}')
+                        continue
+                    t = rm.get('t', None)
+                    if t is not None:
+                        w = rm.get('w', 0) or 0
+                        h = rm.get('h', 0) or 0
+                        if self.masterReg.match(t):
+                            X.loc[index, 'rms-p_size-n'] = w + h
+                            X.loc[index, 'rms-p_area-n'] = w * h
+                            totalSize += w + h
+                            totalArea += w * h
+                        elif self.bedroomReg.match(t) and getLevel(rm.get('l', 1)) >= 1:
+                            totalSize += w + h
+                            totalArea += w * h
+                X.loc[index, 'rms-t_size-n'] = totalSize
+                X.loc[index, 'rms-t_area-n'] = totalArea
         if nanCount > 0:
             logger.warning(f'{nanCount}/{totalCount} nan values in rms')
         timer.stop(totalCount)

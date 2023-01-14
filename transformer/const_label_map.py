@@ -194,19 +194,26 @@ roomType = [
 
 bsmtType = {
     "Apt": 'bsmtApt',
+    "Apartment": 'bsmtApt',
     "Crw": 'bsmtCrw',
     "Fin": 'bsmtFin',
+    "Finished": 'bsmtFin',
     "Full": 'bsmtFull',
     "Half": 'bsmtHalf',
     "NAN": 'bsmtNON',
+    "None": 'bsmtNON',
     "NON": 'bsmtNON',
     "Prt": 'bsmtPrt',
     "Sep": 'bsmtSep',
+    "Sep Entrance": 'bsmtSep',
     "Slab": 'bsmtSlab',
     "W/O": 'bsmtWO',
+    "Finished/Walkout": ['bsmtFin','bsmtWO'],
     "W/U": 'bsmtWU',
     "Y": 'bsmtY',
     "unFin": 'bsmtUnFin',
+    "Unfinished": 'bsmtUnFin',
+    "Other": 'bsmtOther',
 }
 
 featType = {
@@ -424,6 +431,8 @@ lockerType = {
     'None': 'lkrNone',
     'O': 'lkrOwned',
     'Owned': 'lkrOwned',
+    1: 'lkrOwned',
+    0: 'lkrNone',
 }
 
 exposureType = {
@@ -469,6 +478,7 @@ heatType = {
     "Furnace": 'htFurnace',
     "Furnance": 'htFurnace',
     "Gas":  'htGas',
+    "Gas Forced Air": ['htGas', 'htForceAir'],
     "Gas Forced Air Closd": ['htGas', 'htForceAir'],
     "Gas Forced Air Close": ['htGas', 'htForceAir'],
     "Gas Forced Air Open": ['htGas', 'htForceAir'],

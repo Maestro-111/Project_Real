@@ -88,7 +88,7 @@ class MongoDB():
     def updateOne(self, collection, query, update, upsert=None):
         # save to mongo
         update = self.appendMt(update)
-        logger.debug(update)
+        logger.debug(query, update)
         if isinstance(collection, str):
             collection = self.collection(collection)
         if upsert is None:
@@ -176,6 +176,17 @@ class MongoDB():
         indexes = self.collection(collectionName).index_information()
         logger.info('hasIndex', indexes)
         return indexes.get(fields)
+
+    def getCurrentResumeToken(self, collectionName):
+        resume_token = None
+        with self.collection(collectionName).watch() as stream:
+            while stream.alive:
+                resume_token = stream.resume_token
+                break
+        return resume_token
+
+    def watch(self, collectionName, resume_token):
+        return self.collection(collectionName).watch(resume_after=resume_token)
 
 
 theMongoDb = MongoDB()

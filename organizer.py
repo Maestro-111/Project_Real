@@ -13,32 +13,39 @@
 #    - load encoder database if not yet
 #    - load models
 #    - predict results
+import os
 
-import datetime
 import socket
 import sys
+import time
 from pandas import DataFrame
 from base.timer import Timer
 from base.util import dateFromNum
 import numpy as np
 import pandas as pd
-import psutil
 from base.base_cfg import BaseCfg
-from base.const import CONCURRENT_PROCESSES_MAX, DEFAULT_DATE_POINT_DATE, DEFAULT_START_DATA_DATE, Mode
+from base.const import CONCURRENT_PROCESSES_MAX, DEFAULT_DATE_POINT_DATE, DEFAULT_START_DATA_DATE, PROPERTIES_COLLECTION
 from base.mongo import MongoDB
 from base.model_gridfs_store import GridfsStore
 from base.sysDataHelpers import setSysdataTs
 from data.data_source import DataSource
 from data.estimate_scale import EstimateScale, PropertyType
 from transformer.preprocessor import Preprocessor
-import concurrent.futures
+import logging
+
 
 from estimator.builtyear_lgbm_estimate_manager import BuiltYearLgbmManager
 from estimator.sqft_lgbm_estimate_manager import SqftLgbmEstimateManager
 from estimator.rent_lgbm_estimate_manager import RentLgbmManager
 from estimator.value_lgbm_estimate_manager import ValueLgbmEstimateManager
 from estimator.soldprice_lgbm_estimate_manager import SoldPriceLgbmEstimateManager
+from signal import Signals, signal, SIGINT
+from sys import exit
 
+SYSDATA_COLLECTION = 'sysdata'
+WATCH_FIELDS = ('addr', 'lat', 'lp', 'lpr', 'city', 'onD',
+                'bdrms', 'br_plus', 'bthrms', 'kch', 'kch_plus', 'gr', 'ptype2', 'pstyl',
+                'sqft', 'age', 'rmSqft', 'rmBltYr',)
 
 logger = BaseCfg.getLogger(__name__)
 
@@ -94,7 +101,7 @@ class Organizer:
     def __update_status(self, job, status):
         self.__status = status
         logger.info(f'Organizer job({job}) status: {status}')
-        setSysdataTs(self.mongodb, 'sysdata', {
+        setSysdataTs(self.mongodb, SYSDATA_COLLECTION, {
             'id': f"prop.Organizer_{socket.gethostname()}",
             'batchNm': sys.argv[0],
             'job': job,
@@ -218,3 +225,100 @@ class Organizer:
                 added_cols.extend(y_col_names)
                 db_cols.extend(y_db_col_names)
         return df_grouped, added_cols, db_cols
+
+    def watch_n_predicting(self, resume: bool = False):
+        """Watch and predicting."""
+        self.__update_status('watch', 'run')
+        #query = {'ptype': 'r', 'status': 'A'}
+        query = self.data_source.get_query()
+
+        def save_resume_token(resume_token):
+            self.mongodb.updateOne(
+                SYSDATA_COLLECTION,
+                {'_id': 'ml_resume_token'},
+                {'$set': {'value': resume_token}},
+                upsert=True)
+        if not resume:
+            # get resume_token
+            resume_token = self.mongodb.getCurrentResumeToken(
+                PROPERTIES_COLLECTION)
+            # find all available ids
+            cursor = self.mongodb.collection(
+                PROPERTIES_COLLECTION).find(query, {'_id': 1})
+            available_ids = [doc['_id'] for doc in cursor]
+            # predict and save to database
+            self.predict(available_ids, True)
+            # update resume_token
+            save_resume_token(resume_token)
+        else:
+            ml_resume_token = self.mongodb.findOne(
+                SYSDATA_COLLECTION, {'_id': 'ml_resume_token'})
+            if ml_resume_token is None:
+                logger.error('no resume token found')
+                self.__update_status('watch', 'error')
+                return
+            resume_token = ml_resume_token['value']
+        if resume_token is None:
+            raise Exception('no resume token found')
+        # watch from resume_token
+        with self.mongodb.watch(PROPERTIES_COLLECTION, resume_token) as stream:
+            changeIDs = []
+            # take care of the SIGINT
+
+            def before_close(signum, frame):
+                signame = Signals(signum).name
+                logger.info(
+                    f'Signal handler called with signal {signame} ({signum})')
+                if len(changeIDs) > 0:
+                    self.predict(changeIDs, True)
+                    changeIDs.clear()
+                save_resume_token(stream.resume_token)
+                stream.close()
+                self.__update_status('watch', 'interrupted')
+                logger.info('watching interrupted')
+            signal(SIGINT, before_close)
+            # start watching
+            while stream.alive:
+                change = stream.try_next()
+                if change is not None:
+                    # logger.info(f"change {change['operationType']}")
+                    if change['operationType'] == 'insert':
+                        changeIDs.append(change['documentKey']['_id'])
+                    elif change['operationType'] == 'update':
+                        if 'updateDescription' in change:
+                            updatedFields = change['updateDescription']['updatedFields']
+                            for field in WATCH_FIELDS:
+                                if field in updatedFields:
+                                    changeIDs.append(
+                                        change['documentKey']['_id'])
+                                    break
+                        else:
+                            logger.info(
+                                f"no updateDescription {change['documentKey']['_id']}")
+                    else:
+                        logger.info(
+                            f"no need to predict {change['documentKey']['_id']} {change['operationType']}")
+                    continue
+                if len(changeIDs) > 0:
+                    logger.info(f"predict {len(changeIDs)} ids")
+                    self.predict(changeIDs, True)
+                    changeIDs = []
+                else:
+                    logger.info('no change sleep 5 seconds')
+                    time.sleep(5)
+        self.__update_status('watch', 'done')
+
+
+def main(debug: bool = False):
+    """Main function."""
+    logger.info('start organizer...')
+    orgnizer = Organizer()
+    orgnizer.load_data()
+    orgnizer.init_transformers()
+    orgnizer.train_models()
+    orgnizer.save_models()
+    orgnizer.watch_n_predicting()
+
+
+if __name__ == '__main__':
+    main(True)

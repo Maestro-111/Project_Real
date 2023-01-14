@@ -15,7 +15,7 @@ import logging
 from base.const import Mode
 from helper.feature_select import FeatureSelector
 from base.timer import Timer
-from estimator.organizer import Organizer
+from organizer import Organizer
 from math import isnan
 
 
@@ -31,6 +31,8 @@ org.load_data()
 org.init_transformers()
 
 org.train_models()
+org.watch_n_predicting()
+
 
 org.save_models()
 
@@ -38,7 +40,7 @@ now = datetime.datetime.now()
 print ("Current date and time : ")
 print (now.strftime("%Y-%m-%d %H:%M:%S"))
 
-df, a_cols = org.predict([
+df, a_cols, db_cols = org.predict([
     'TRBW5841870', 'TRBW5841549', 'TRBW5840562', 'DDF25100869', 'TRBX5810806',  # Mississauga
 #    'TRBC5841835', 'TRBC5841873', 'TRBE5841152', 'TRBE5840727', 'TRBC5841124',  # Toronto
 #    'TRBN5841327', 'DDF25052539', 'TRBN5841525', 'TRBN5840799', 'TRBN5841438',  # Markham
@@ -342,3 +344,25 @@ df.to_dict(orient='index')
 
 t = (1,2,3)
 print( t[2])
+
+import re
+def allTypeToFloat(value):
+    v_type = type(value)
+    if v_type is int:
+        return float(value)
+    if v_type is float:
+        if isnan(value):
+            return None
+        return value
+    if v_type is str:
+        num_array = re.findall(r'\d+(?:\.\d+)?', value)
+        value = ''.join(num_array)
+        if len(value) > 0 and value.isnumeric():
+            return float(value)
+        return float(num_array[0])
+    if v_type is list:
+        return allTypeToFloat(value[0])
+    return None
+txt = '72.37 58.5'
+print(txt.isnumeric())
+allTypeToFloat(txt)

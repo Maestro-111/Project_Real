@@ -56,7 +56,7 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
             Returns self.
         """
 
-        #logger.debug(f'fit rms')
+        # logger.debug(f'fit rms')
         return self
 
     def transform(self, X):
@@ -79,25 +79,29 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
         totalCount = 0
         for col in self.get_feature_names_out():
             X[col] = 0
-        for index, bths in X.loc[:, 'bths'].items():
-            totalCount += 1
-            if not isinstance(bths, list):
-                if isnan(bths):
-                    nanCount += 1
-                    continue
-                logger.warning(f'bths is not list: {bths}')
-                continue
-            for bth in bths:
-                if not isinstance(bth, dict):
-                    if isnan(bth):
+        if 'bths' not in X.columns:
+            X['bths'] = [None for _ in range(X.shape[0])]
+            logger.warning('no bths column')
+        else:
+            for index, bths in X.loc[:, 'bths'].items():
+                totalCount += 1
+                if not isinstance(bths, list):
+                    if isnan(bths):
+                        nanCount += 1
                         continue
-                    logger.warning(f'bth is not dict: {bth} {type(bth)}')
+                    logger.warning(f'bths is not list: {bths}')
                     continue
-                level = max(
-                    0, min(round(getLevel(bth.get('l', 1)) + 0.01), BthsTransformer.maxLevel))
-                t = bth.get('t', 0)
-                X.loc[index, f'bths-t{level}-n'] += t
-                X.loc[index, f'bths-pc{level}-n'] += t * bth.get('p', 0)
+                for bth in bths:
+                    if not isinstance(bth, dict):
+                        if isnan(bth):
+                            continue
+                        logger.warning(f'bth is not dict: {bth} {type(bth)}')
+                        continue
+                    level = max(
+                        0, min(round(getLevel(bth.get('l', 1)) + 0.01), BthsTransformer.maxLevel))
+                    t = bth.get('t', 0)
+                    X.loc[index, f'bths-t{level}-n'] += t
+                    X.loc[index, f'bths-pc{level}-n'] += t * bth.get('p', 0)
         if nanCount > 0:
             logger.warning(f'{nanCount}/{totalCount} nan values in bths')
         timer.stop(X.shape[0])

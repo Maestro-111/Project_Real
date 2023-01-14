@@ -231,6 +231,9 @@ class DataSource:
     def __str__(self):
         return f'DataSource: {self._query}'
 
+    def get_query(self):
+        return self._query
+
     def load_raw_data(self):
         """Load raw data from mongodb"""
         self.df_raw = read_data_by_query(

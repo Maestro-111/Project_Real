@@ -278,6 +278,7 @@ class Organizer:
                 logger.info('watching interrupted')
             signal(SIGINT, before_close)
             # start watching
+            sleepCount = 0
             while stream.alive:
                 change = stream.try_next()
                 if change is not None:
@@ -304,8 +305,11 @@ class Organizer:
                     self.predict(changeIDs, True)
                     changeIDs = []
                 else:
-                    logger.info('no change sleep 5 seconds')
-                    time.sleep(5)
+                    if sleepCount >= 10:
+                        print(".", end='', flush=True)
+                        sleepCount = 0
+                    sleepCount += 1
+                    time.sleep(6)
         self.__update_status('watch', 'done')
 
 

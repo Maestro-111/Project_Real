@@ -181,3 +181,10 @@ def roundByN(value, n=1):
     if isnan(value):
         return value
     return int(round(value / n) * n)
+
+
+def expendList(list1, list2):
+    for item in list2:
+        if item not in list1:
+            list1.append(item)
+    return list1

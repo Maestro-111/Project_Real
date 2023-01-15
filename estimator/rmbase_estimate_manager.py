@@ -5,7 +5,7 @@ from typing import Union
 from base.base_cfg import BaseCfg
 from base.const import MODEL_TYPE_CLASSIFICATION, MODEL_TYPE_REGRESSION
 from base.model_store import ModelStore
-from base.util import getRoundFunction
+from base.util import expendList, getRoundFunction
 from data.data_source import DataSource
 import pandas as pd
 import numpy as np
@@ -129,8 +129,8 @@ class RmBaseEstimateManager:
                     df_grouped=df_grouped, scale=scale)
                 if df_y is not None:
                     df_y_list.append(df_y)
-                    y_cols_list.extend(y_cols)
-                    y_db_cols_list.extend(y_db_cols)
+                    expendList(y_cols_list, y_cols)
+                    expendList(y_db_cols_list, y_db_cols)
             if len(df_y_list) > 0:
                 df_y = pd.concat(df_y_list)
                 return df_y, y_cols_list, y_db_cols_list

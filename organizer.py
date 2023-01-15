@@ -72,8 +72,8 @@ class Organizer:
             datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
             propType=None,  # PropertyType.DETACHED,
             prov='ON',
-            area='Peel',
-            city='Mississauga',
+            area=None,
+            city=None,
             sale=None,
         )
         self.default_sale_scale = EstimateScale(

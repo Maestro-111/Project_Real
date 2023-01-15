@@ -256,11 +256,11 @@ class DataSource:
         setCounterToZero()
         for prov, area, city in self.df_raw[['prov', 'area', 'city']].values:
             if isinstance(area, str) and area != '' and isinstance(city, str) and city != '' and isinstance(prov, str) and prov != '':
-                if PROV_CITY_TO_AREA_COUNT.get((prov, city), 0) is 0:
+                if PROV_CITY_TO_AREA_COUNT.get((prov, city), 0) == 0:
                     PROV_CITY_TO_AREA[(prov, city)] = area
                     PROV_CITY_TO_AREA_COUNT[(prov, city)] = 1
                 else:  # not exist
-                    if PROV_CITY_TO_AREA[(prov, city)] is area:
+                    if PROV_CITY_TO_AREA[(prov, city)] == area:
                         PROV_CITY_TO_AREA_COUNT[(prov, city)] += 1
                         continue
                     # conflict

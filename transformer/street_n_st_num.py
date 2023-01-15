@@ -59,6 +59,9 @@ class StNumStTransformer(BaseEstimator, TransformerMixin):
             The transformed data.
         """
         # logger.debug(f'transform st_num-st')
+        if 'st-c' not in X.columns or 'st_num-n' not in X.columns:
+            logger.warning(f'st-c or st_num-n not in X.columns')
+            return X
         timer = Timer('st_num-st', logger)
         nanCount = 0
         totalCount = 0

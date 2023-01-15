@@ -144,9 +144,8 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
         error_count = 0
         default_col_name = self.map.get('-', None)
         new_cols = self.get_feature_names_out()
-        for col in new_cols:
-            if col not in X.columns:
-                X[col] = 0
+        cols_to_add = [col for col in new_cols if col not in X.columns]
+        X[cols_to_add] = (0,) * len(cols_to_add)
 
         def _set_value(value, i):
             nonlocal error_count
@@ -176,14 +175,15 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
                     for v in value:
                         _set_value(v, i)
                         list_value_count += 1
-                elif isinstance(value, str):
+                elif isinstance(value, str) or isinstance(value, int):
+                    # sometimes the value is int
                     _set_value(value, i)
                     str_value_count += 1
                 elif isNanOrNone(value):
                     continue
                 else:
                     logger.error(
-                        f'{self.col} {value} {type(value)} not in map')
+                        f'{self.col} {value} {type(value)} not in map at row: {i}')
                     error_count += 1
 
             # set category column

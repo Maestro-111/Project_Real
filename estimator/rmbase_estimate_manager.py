@@ -129,8 +129,12 @@ class RmBaseEstimateManager:
                     df_grouped=df_grouped, scale=scale)
                 if df_y is not None:
                     df_y_list.append(df_y)
-                    expendList(y_cols_list, y_cols)
-                    expendList(y_db_cols_list, y_db_cols)
+                    for i in range(len(y_cols)):
+                        col = y_cols[i]
+                        if col not in y_cols_list:
+                            y_cols_list.append(col)
+                            # y_db_cols_list must match y_cols_list
+                            y_db_cols_list.append(y_db_cols[i])
             if len(df_y_list) > 0:
                 df_y = pd.concat(df_y_list)
                 return df_y, y_cols_list, y_db_cols_list
@@ -171,7 +175,7 @@ class RmBaseEstimateManager:
         # fill missing values with mean
         for col in list(set(x_cols) - set(df.columns)):
             df[col] = x_means[col]
-        self.logger.info(df.head())
+        self.logger.debug(df.head())
         y = model.predict(df[x_cols])
         if self.model_class == MODEL_TYPE_REGRESSION:
             y = self.round_result(y)
@@ -287,7 +291,7 @@ class RmBaseEstimateManager:
         if x_columns is not None:
             col_list.extend(x_columns)
         elif hasattr(self, 'x_columns'):
-            self.logger.info(f'x_columns: {self.x_columns}')
+            # self.logger.debug(f'x_columns: {self.x_columns}')
             col_list.extend(self.x_columns)
         if len(col_list) == 0:
             # when no x_columns are specified, load all columns

@@ -107,7 +107,7 @@ def read_data_by_query(
     """
     if mongodb is None:
         mongodb = MongoDB()
-    logger.info(f'Mongo Query: {query}')
+    logger.info(f'Mongo Query: {str(query)[0:160]}')
     start_time = time.time()
     result = mongodb.load_data('properties', col_list, query)
     if BaseCfg.isDebug():
@@ -256,25 +256,27 @@ class DataSource:
         setCounterToZero()
         for prov, area, city in self.df_raw[['prov', 'area', 'city']].values:
             if isinstance(area, str) and area != '' and isinstance(city, str) and city != '' and isinstance(prov, str) and prov != '':
-                if PROV_CITY_TO_AREA_COUNT.get((prov, city), 0) == 0:
+                if PROV_CITY_TO_AREA_COUNT.get((prov, city), 0) is 0:
                     PROV_CITY_TO_AREA[(prov, city)] = area
                     PROV_CITY_TO_AREA_COUNT[(prov, city)] = 1
-                else:
-                    if PROV_CITY_TO_AREA[(prov, city)] != area:
-                        change = False
-                        if PROV_CITY_TO_AREA_COUNT[(prov, city)] < 10:
-                            # change to conflict if conflict count < 10
-                            PROV_CITY_TO_AREA[(prov, city)] = area
-                            # reset conflict count to 1
-                            PROV_CITY_TO_AREA_COUNT[(prov, city)] = 1
-                            change = True
-                        if PROV_CITY_TO_AREA_COUNT[(prov, city)] < 100:
-                            # only log conflict if conflict count < 100
-                            logger.warning(
-                                f'PROV_CITY_TO_AREA conflict: {(prov, city)}: {PROV_CITY_TO_AREA[(prov, city)]} {PROV_CITY_TO_AREA_COUNT[(prov, city)]} vs New:{area}. {"Change to New" if change else "Keep old value"}')
-                    else:
-                        PROV_CITY_TO_AREA[(prov, city)] = area
+                else:  # not exist
+                    if PROV_CITY_TO_AREA[(prov, city)] is area:
                         PROV_CITY_TO_AREA_COUNT[(prov, city)] += 1
+                        continue
+                    # conflict
+                    change = False
+                    areaBeforeChange = PROV_CITY_TO_AREA[(prov, city)]
+                    if PROV_CITY_TO_AREA_COUNT[(prov, city)] < 20:
+                        # change to new area if count < 10
+                        PROV_CITY_TO_AREA[(prov, city)] = area
+                        # reset count to 1
+                        PROV_CITY_TO_AREA_COUNT[(prov, city)] = 1
+                        change = True
+                    if PROV_CITY_TO_AREA_COUNT[(prov, city)] < 100:
+                        # only log conflict if conflict count < 100
+                        logger.warning(
+                            f'PROV_CITY_TO_AREA conflict: {(prov, city)}: {areaBeforeChange} {PROV_CITY_TO_AREA_COUNT[(prov, city)]} vs New:{area}. {"Change to New" if change else "Keep old value"}')
+
         calcProvCityToAreaDF(write_to_file=write_to_file)
         return PROV_CITY_TO_AREA
 
@@ -292,8 +294,8 @@ class DataSource:
         # fill missing area
         df_raw_to_predict['area'] = df_raw_to_predict.apply(
             lambda row: PROV_CITY_TO_AREA.get((row['prov'], row['city']), 'Other'), axis=1)
-        logger.info(PROV_CITY_TO_AREA)
-        logger.info(df_raw_to_predict[['prov', 'area', 'city']])
+        logger.debug(PROV_CITY_TO_AREA)
+        logger.debug(df_raw_to_predict[['prov', 'area', 'city']])
         df_transformed_to_predict = preprocessor.transform(df_raw_to_predict)
         # groupby and reindex by EstimateScale
         df_grouped_to_predict = df_transformed_to_predict.set_index([
@@ -536,7 +538,7 @@ class DataSource:
             elif isinstance(db_col, list):
                 if len(db_col) != len(col):
                     raise Exception(
-                        f'len(db_col) must be equal to len(col), but got {len(db_col)} and {len(col)}')
+                        f'len(db_col) must be equal to len(col), but got {len(db_col)}({db_col}) and {len(col)}({col})')
             else:
                 raise Exception(
                     f'db_col must be str or list[str], but got {type(db_col)}')

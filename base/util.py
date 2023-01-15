@@ -184,7 +184,9 @@ def roundByN(value, n=1):
 
 
 def expendList(list1, list2):
+    addedCounter = 0
     for item in list2:
-        if item not in list1:
+        if (item is not None) and (item not in list1):
             list1.append(item)
-    return list1
+            addedCounter += 1
+    return addedCounter

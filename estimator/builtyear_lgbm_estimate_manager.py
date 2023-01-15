@@ -28,6 +28,7 @@ class BuiltYearLgbmManager(LgbmEstimateManager, WritebackMixin):
         'st', 'st_num',
     ]
     y_column = 'bltYr'
+    y_db_col = 'bltYr_m1'
 
     def __init__(self, data_source):
         super().__init__(

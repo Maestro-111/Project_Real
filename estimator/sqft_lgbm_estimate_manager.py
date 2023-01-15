@@ -15,6 +15,7 @@ def needSqft(row):
 class SqftLgbmEstimateManager(LgbmEstimateManager, WritebackMixin):
     """Sqft estimate manager."""
 
+    y_db_col = 'sqft_m1'
     y_column = 'sqft'
     x_columns = [
         'lat', 'lng',

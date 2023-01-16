@@ -81,6 +81,8 @@ def binarySaletpByRow(row, saletp):
 
 def ptype2SingleValue(row, ptype2):
     for value in ptype2:
+        if not isinstance(value, str):
+            continue
         if PropertyTypeRegexp.SEMI_DETACHED.match(value):
             return PropertyType.SEMI_DETACHED
         elif PropertyTypeRegexp.DETACHED.match(value):

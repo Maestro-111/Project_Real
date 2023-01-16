@@ -115,20 +115,21 @@ class Organizer:
         self.mongodb.close()
         logger.info('Organizer end')
 
-    def load_data(self):
+    def load_data(self, scale: EstimateScale = None):
         """Load data from database."""
         self.__update_status('load data', 'run')
         query = {
             # '_id': {'$in': ['TRBW474049', 'TRBW4874697']},
             'onD': {'$gt': DEFAULT_START_DATA_DATE},
         }
-        scales = []
+        if scale is None:
+            scale = self.default_all_scale
         # area search does not work well, since many records have no area
         # for area in ['York', 'Peel', 'Toronto', 'Durham']:
         #     # ,'Hamilton','Waterloo','Niagara','Ottawa']:
         #     scales.append(self.default_all_scale.copy(area=area))
         self.data_source = DataSource(
-            scale=self.default_all_scale,
+            scale=scale,
             query=query)
         self.data_source.load_raw_data()
         self.__update_status('load data', 'done')

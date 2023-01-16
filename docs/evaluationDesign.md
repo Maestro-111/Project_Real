@@ -8,8 +8,6 @@ This could be the foundation for many of the other approaches. It is also a good
 
 Baseline is calculated on both average and median, and a standard deviation for each of the following category(Monthly average/median/std of the last 12 months or from the beginning of the data to the current month):
 
-- City
-- Community(cmty)
 - Type of building(tp) in the city: Detached, Semi-detached, Townhouse, Apartment
 - Features for each type of building in the city: [Feature list](#feature-list)
 
@@ -40,6 +38,7 @@ The mappings, ratio and standard deviation(s) will be saved for each feature.
 
 #### Feature list
 
+- community \*1
 - garage \*1
 - parking total \*1
 - bedrooms \*1
@@ -58,6 +57,31 @@ The mappings, ratio and standard deviation(s) will be saved for each feature.
 
 **Note:** Numbers to save: toCity(delta, std, cnt), toType(delta, std, cnt).
 For discrete values, the mapping will be saved. For continues values, the ratio will be saved.
+
+#### Data Structure
+
+- DB: (key) -> (fields). s for sale, r for rent.
+  - (YYMMs|r)
+    - ts: running date and time
+    - span: date span (in days)
+    - cnt: number of records
+    - seconds: cost time in seconds
+  - (YYMMs|r+Prov+City+Type) -> (mean, median, std, cnt, min, max)
+  - (YYMMs|r+Prov+City+Type+Feature): for discrete values
+    - (mean, median, std, cnt, delta, deltaM, min, max): delta to (Prov+City+Type), deltaM is for Median
+    - values
+      - (value) -> (mean, median, std, cnt, delta, deltaM, min, max)
+  - (YYMMs|r+Prov+City+Type+Feature): for continues values
+    - (mean, median, std, cnt, ratio, ratioM, min, max): ratio to (Prov+City+Type), ratioM is for Median
+- Cache: Dictionary. Sale and Rent are separated.
+  - Prov + City + Type
+    - (mean, median, std, cnt, min, max)
+    - features:
+      - (Feature)
+        - (mean, median, std, cnt, delta, deltaM, min, max): delta to (Prov+City+Type), deltaM is for Median
+        - values
+          - (value) -> (mean, median, std, cnt, delta, deltaM, min, max)
+        - (mean, median, std, cnt, ratio, ratioM, min, max): ratio to (Prov+City+Type), ratioM is for Median
 
 ### 1.2 Evaluation based on features
 

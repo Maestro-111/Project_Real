@@ -82,9 +82,16 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         featureImportance = self.feature_importance(model)
         self.logger.info('------------------------------------------------')
         featureImportanceDic = {}
+        weightToPrint = []
         for weight, feature in featureImportance:
-            featureImportanceDic[feature] = int(weight)
-            self.logger.info(f'{feature}: {weight}')
+            intWeight = int(weight)
+            featureImportanceDic[feature] = intWeight
+            if intWeight == 0:
+                weightToPrint.append(f'|{feature}')
+            else:
+                weightToPrint.append(
+                    f'{feature.rjust(12)}:{str(weight).ljust(5)};')
+        self.logger.info(''.join(weightToPrint))
         return (scale, model, accuracy, x_cols, x_means, {'feature_importance': featureImportanceDic})
 
     def feature_importance(self, model) -> list:

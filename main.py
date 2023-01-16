@@ -17,6 +17,9 @@ from helper.feature_select import FeatureSelector
 from base.timer import Timer
 from organizer import Organizer
 from math import isnan
+from data.estimate_scale import EstimateScale
+from base.util import dateFromNum
+from base.const import DEFAULT_DATE_POINT_DATE
 
 
 logger = logging.getLogger()
@@ -26,8 +29,17 @@ logging.debug("test")
 timer = Timer('Overall',logger)
 timer.start()
 
+search_scale = EstimateScale(
+            datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
+            propType=None,  # PropertyType.DETACHED,
+            prov='ON',
+            area=None,
+            city='Mississauga',
+            sale=None,
+        )
+
 org = Organizer()
-org.load_data()
+org.load_data(search_scale)
 org.init_transformers()
 
 org.train_models()

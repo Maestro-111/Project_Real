@@ -103,7 +103,7 @@ def stringToInt(value):
     return None
 
 
-def dateFromNum(dayNum):
+def ymdFromNum(dayNum):
     if isnan(dayNum):
         return None
     dayNum = int(dayNum)
@@ -120,7 +120,22 @@ def dateFromNum(dayNum):
         if month > 12:
             month = 12
             print(f'month > 12 : {dayNum}')
+    return year, month, day
+
+
+def dateFromNum(dayNum):
+    year, month, day = ymdFromNum(dayNum)
     return datetime(year, month, day, 0, 0)
+
+
+def daysOfDifferenceFromNumRough(date1: int, date2: int) -> int:
+    y1, m1, d1 = ymdFromNum(date1)
+    y2, m2, d2 = ymdFromNum(date2)
+    return (y1-y2)*365 + (m1-m2)*30 + (d1-d2)
+
+
+def daysOfDifference(date1: datetime, date2: datetime) -> int:
+    return (date1 - date2).days
 
 
 def dateToNum(date: datetime = datetime.today()):

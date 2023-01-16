@@ -35,26 +35,26 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
             return self._target_cols
 
         self._target_cols = [
-            'onD-2k-n',
+            # 'onD-2k-n',
             'onD-year-n',
-            'onD-month-n',
-            'onD-week-n',
             'onD-season-n',
-            'onD-dayOfWeek-n',
-            'onD-dayOfMonth-n',
-            'onD-dayOfYear-n',
+            'onD-month-n',  # based on Janurary of previous year, could be negative
+            # 'onD-week-n',
+            # 'onD-dayOfWeek-n',
+            # 'onD-dayOfMonth-n',
+            # 'onD-dayOfYear-n',
         ]
         if cols is None:
             cols = self.cols
         if 'offD' in cols:
             self.offD = True
-            self._target_cols.append('offD-2k-n')
-            self._target_cols.append('dom-n')
+            # self._target_cols.append('offD-2k-n')
+            # self._target_cols.append('dom-n')
         else:
             self.offD = False
         if 'sldd' in cols:
             self.sldd = True
-            self._target_cols.append('sldd-n')
+            # self._target_cols.append('sldd-dom-n')
         else:
             self.sldd = False
         return self._target_cols
@@ -107,40 +107,44 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
         nanCount = 0
         offDNanCount = 0
         totalCount = 0
-        for col in self.get_feature_names_out():
-            X[col] = None
-        hasOffD = 'offD' in X.columns
-        hasSldd = 'sldd' in X.columns
+        toAddCols = [col for col in self.get_feature_names_out()
+                     if col not in X.columns]
+        X = pd.concat(
+            [X, pd.DataFrame(columns=toAddCols, index=X.index)], axis=1)
+        # hasOffD = 'offD' in X.columns
+        # hasSldd = 'sldd' in X.columns
+        previousYear = datetime.datetime.now().year - 1
         for i, row in X.iterrows():
             totalCount += 1
             onD = dateFromNum(row['onD'])
             if onD is not None:
-                X.loc[i, 'onD-2k-n'] = abs((onD - DATE_20000101).days)
                 X.loc[i, 'onD-year-n'] = onD.year
-                X.loc[i, 'onD-month-n'] = onD.month
-                X.loc[i, 'onD-week-n'] = onD.isocalendar().week
                 X.loc[i, 'onD-season-n'] = onD.month // 3
-                X.loc[i, 'onD-dayOfWeek-n'] = onD.weekday()
-                X.loc[i, 'onD-dayOfMonth-n'] = onD.day
-                X.loc[i, 'onD-dayOfYear-n'] = onD.timetuple().tm_yday
-                if hasOffD:
-                    offD = dateFromNum(row['offD'])
-                    if offD is not None:
-                        X.loc[i, 'offD-2k-n'] = abs(
-                            (offD - DATE_20000101).days)
-                        X.loc[i, 'dom-n'] = abs((offD - onD).days)
-                    else:
-                        offDNanCount += 1
+                X.loc[i, 'onD-month-n'] = onD.month + \
+                    (onD.year - previousYear) * 12
+                # X.loc[i, 'onD-week-n'] = onD.isocalendar().week
+                #X.loc[i, 'onD-2k-n'] = abs((onD - DATE_20000101).days)
+                # X.loc[i, 'onD-dayOfWeek-n'] = onD.weekday()
+                # X.loc[i, 'onD-dayOfMonth-n'] = onD.day
+                # X.loc[i, 'onD-dayOfYear-n'] = onD.timetuple().tm_yday
+                # if hasOffD:
+                #     offD = dateFromNum(row['offD'])
+                #     if offD is not None:
+                #         # X.loc[i, 'offD-2k-n'] = abs(
+                #         #     (offD - DATE_20000101).days)
+                #         X.loc[i, 'dom-n'] = abs((offD - onD).days)
+                #     else:
+                #         offDNanCount += 1
             else:
                 nanCount += 1
                 logger.warn(f'onD is None: {row}')
-            if hasSldd:
-                sldd = dateFromNum(row['sldd'])
-                if sldd is not None:
-                    X.loc[i, 'sldd-n'] = abs((sldd - DATE_20000101).days)
+            # if hasSldd:
+            #     sldd = dateFromNum(row['sldd'])
+            #     if sldd is not None:
+            #         X.loc[i, 'sldd-dom-n'] = abs((sldd - onD).days)
         if nanCount > 0:
             logger.warn(f'onD is None: {nanCount}/{totalCount}')
-        if offDNanCount > 0:
-            logger.info(f'offD is None: {offDNanCount}/{totalCount}')
+        # if offDNanCount > 0:
+        #     logger.info(f'offD is None: {offDNanCount}/{totalCount}')
         timer.stop(totalCount)
         return X

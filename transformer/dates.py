@@ -113,7 +113,7 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
             [X, pd.DataFrame(columns=toAddCols, index=X.index)], axis=1)
         # hasOffD = 'offD' in X.columns
         # hasSldd = 'sldd' in X.columns
-        previousYear = datetime.datetime.now().year - 1
+        previous2Year = datetime.datetime.now().year - 2
         for i, row in X.iterrows():
             totalCount += 1
             onD = dateFromNum(row['onD'])
@@ -121,7 +121,7 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
                 X.loc[i, 'onD-year-n'] = onD.year
                 X.loc[i, 'onD-season-n'] = onD.month // 3
                 X.loc[i, 'onD-month-n'] = onD.month + \
-                    (onD.year - previousYear) * 12
+                    (onD.year - previous2Year) * 12
                 # X.loc[i, 'onD-week-n'] = onD.isocalendar().week
                 #X.loc[i, 'onD-2k-n'] = abs((onD - DATE_20000101).days)
                 # X.loc[i, 'onD-dayOfWeek-n'] = onD.weekday()

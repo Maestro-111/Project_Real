@@ -428,7 +428,8 @@ class DataSource:
         logger.debug(
             f'{scale.datePoint-timedelta(days=date_span)}-{scale.datePoint} {len(rd.index)}')
         # filter data by filter_func
-        rd = rd.loc[rd.apply(filter_func, axis=1)] if filter_func else rd
+        if filter_func is not None:
+            rd = rd.loc[rd.apply(filter_func, axis=1, result_type='reduce')]
         logger.debug(f'after filter_func {len(rd.index)}')
         if len(rd.index) == 0:
             return None
@@ -527,7 +528,8 @@ class DataSource:
                 f'col must be str or list[str], but got {type(col)}')
         for c in col:
             if c not in df_grouped.columns:
-                df_grouped.loc[:, c] = NaN
+                #df_grouped.loc[:, c] = NaN
+                df_grouped[c] = NaN
             if yIsSeries:
                 df_grouped.loc[y.index, c] = y
             else:

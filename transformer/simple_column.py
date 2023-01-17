@@ -76,7 +76,7 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
                         logger.warning(f'{col} is not in X columns yet')
                 else:
                     func.fit(X)
-            if preTransform:
+            if preTransform:  # some transformers need to be applied before others to fit the data
                 X = _transform_single(func, col, targetCol, X)
         return self
 

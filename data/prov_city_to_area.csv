@@ -1,5 +1,5 @@
 prov,city,area,count
-ON,Toronto,Toronto,129865
+ON,Toronto,Toronto,129861
 ON,Ottawa,Ottawa,26095
 ON,Mississauga,Peel,25297
 ON,Hamilton,Hamilton,23699
@@ -11,7 +11,7 @@ ON,Vaughan,York,12565
 ON,Barrie,Simcoe,11973
 ON,Kitchener,Waterloo,11691
 ON,Burlington,Halton,10488
-ON,Richmond Hill,York,9540
+ON,Richmond Hill,York,9539
 ON,Windsor,Essex,8622
 ON,Oshawa,Durham,8429
 ON,Milton,Halton,7141
@@ -36,7 +36,7 @@ ON,Chatham-Kent,Hamilton,2817
 ON,Caledon,Peel,2783
 ON,Halton Hills,Halton,2570
 ON,Greater Sudbury / Grand Sudbury,Halton,2537
-ON,Georgina,York,2526
+ON,Georgina,York,2525
 ON,Norfolk County,Niagara,2456
 ON,Collingwood,Simcoe,2397
 ON,Wasaga Beach,Simcoe,2337

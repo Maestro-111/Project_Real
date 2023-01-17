@@ -11,19 +11,16 @@ Baseline is calculated on both average and median, and a standard deviation for 
 - Type of building(tp) in the city: Detached, Semi-detached, Townhouse, Apartment
 - Features for each type of building in the city: [Feature list](#feature-list)
 
-**Note:** Numbers to save: mean, std, cnt
+**Note:** Numbers to save: mean, std, count
 
 A delta(price difference) is calculated for each of the following:
 
-- Community baseline to the city baseline
-- Type of building baseline to the city baseline
-- Each feature value to the feature baseline in the city level: [Feature list](#feature-list)
 - Each feature value to the feature baseline on the type of building in city level: [Feature list](#feature-list)
 
-**Note:** Numbers to save: delta, std, cnt
+**Note:** Numbers to save: delta, std, count
 
 Every community, type of building will be assigned a numeric value based on its delta on thousand dollars. For features with discrete values, feature value will be mapped to a new numeric value based on its delta on thousand dollars. The new numeric value will be used to replace the original value in the data.
-For example, if the delta of a feature value is 2 and average value is 1.5, the feature delta for value 2 is 5 thousand dollars, the mapping ratio will be 5/(2-1.5) = 5/0.5 = 10. The new numeric value will be (2-1.5)\*10 = 5. The ratio will be the average of all the delta of the training set for the feature value.
+For example, if a feature value is 2 and average value is 1.5, the average property value is 800k, the feature value of 2 property value is 850k, then the delta for value 2 is 5 thousand dollars. The ratio will be the average of all the delta divided by all value difference from the average, if the descrete feature value is a number. Otherwise, there is no ratio for the feature.
 
 For features with continues values, a mapping ratio will be calculated based on the delta of the feature value to the feature baseline.
 For example, if the delta of a feature value is 5200 and average value is 4000, the feature delta for value 5200 is 30 thousand dollars, the mapping ratio will be 30/(5200-4000) = 30/1200 = 0.025. The new numeric value will be (5200-4000)\*0.025 = 30.
@@ -78,9 +75,9 @@ For discrete values, the mapping will be saved. For continues values, the ratio 
     - (mean, median, std, cnt, min, max)
     - features:
       - (Feature)
-        - (mean, median, std, cnt, delta, deltaM, min, max): delta to (Prov+City+Type), deltaM is for Median
+        - (mean, median, std, cnt, min, max): feature average value
         - values
-          - (value) -> (mean, median, std, cnt, delta, deltaM, min, max)
+          - (value) -> (mean, median, std, cnt, delta, deltaM, min, max) for discrete values. delta to (Prov+City+Type), deltaM is for Median
         - (mean, median, std, cnt, ratio, ratioM, min, max): ratio to (Prov+City+Type), ratioM is for Median
 
 ### 1.2 Evaluation based on features

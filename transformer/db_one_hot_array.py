@@ -145,7 +145,7 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
         default_col_name = self.map.get('-', None)
         new_cols = self.get_feature_names_out()
         cols_to_add = [col for col in new_cols if col not in X.columns]
-        X[cols_to_add] = (0,) * len(cols_to_add)
+        X[cols_to_add] = 0
 
         def _set_value(value, i):
             nonlocal error_count

@@ -66,8 +66,8 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
         timer.start()
         nanCount = 0
         totalCount = 0
-        for col in self.get_feature_names_out():
-            X[col] = 0
+        new_cols = self.get_feature_names_out()
+        X[new_cols] = 0
         if 'rms' not in X.columns:
             logger.warning('rms not in X.columns')
             X['rms'] = [None for _ in range(len(X))]

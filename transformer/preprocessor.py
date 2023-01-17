@@ -320,7 +320,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         return self.customTransformer.get_feature_names()
 
     def build_transformer(self, all_cols):
-        """Build the transformers for baseline transforming.
+        """Build the transformers.
            The transformers need to work with less columns when the predictions has less data.
 
             Parameters
@@ -329,7 +329,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                 all columns to transform
 
         """
-        logger.info('Building transformers for baseline transforming')
+        logger.info('Building transformers')
         all_cols = [*all_cols]
 
         colTransformerParams = [

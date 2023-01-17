@@ -1,6 +1,7 @@
 # timer.py
 
 import time
+MIN_LOG_COUNT = 10
 
 
 class TimerError(Exception):
@@ -27,6 +28,8 @@ class Timer:
 
         elapsed_time = time.perf_counter() - self._start_time
         if count is not None:
+            if count < MIN_LOG_COUNT:
+                return elapsed_time
             speed = count//elapsed_time
             if speed > 1000000:
                 speed = f"{speed/1000000:.2f}M"

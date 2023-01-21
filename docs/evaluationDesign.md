@@ -60,25 +60,29 @@ For discrete values, the mapping will be saved. For continues values, the ratio 
 - DB: (key) -> (fields). s for sale, r for rent.
   - (YYMMs|r)
     - ts: running date and time
-    - span: date span (in days)
-    - cnt: number of records
+    - dateSpan: date span (in days)
+    - count: number of records
     - seconds: cost time in seconds
+    - startOnD: start date
+    - endOnD: end date
   - (YYMMs|r+Prov+City+Type) -> (mean, median, std, cnt, min, max)
   - (YYMMs|r+Prov+City+Type+Feature): for discrete values
-    - (mean, median, std, cnt, delta, deltaM, min, max): delta to (Prov+City+Type), deltaM is for Median
-    - values
-      - (value) -> (mean, median, std, cnt, delta, deltaM, min, max)
-  - (YYMMs|r+Prov+City+Type+Feature): for continues values
-    - (mean, median, std, cnt, ratio, ratioM, min, max): ratio to (Prov+City+Type), ratioM is for Median
+    - (mean, median, std, cnt, min, max): feature average value
+    - values: for discrete values
+      - (value) -> (mean, median, std, cnt, delta, deltaM, min, max) for discrete values. delta to (Prov+City+Type), deltaM is for Median
+    - ratios: for continues values
+      - (mean, median, std, cnt, min, max): ratio to (Prov+City+Type), ratioM is for Median
 - Cache: Dictionary. Sale and Rent are separated.
+  - (ts,count,seconds,dateSpan,startOnD,endOnD)
   - Prov + City + Type
     - (mean, median, std, cnt, min, max)
     - features:
       - (Feature)
-        - (mean, median, std, cnt, min, max): feature average value
-        - values
-          - (value) -> (mean, median, std, cnt, delta, deltaM, min, max) for discrete values. delta to (Prov+City+Type), deltaM is for Median
-        - (mean, median, std, cnt, ratio, ratioM, min, max): ratio to (Prov+City+Type), ratioM is for Median
+        - (mean, median, std, cnt, min, max): feature values or stats(count, unique, top, freq)
+        - values: for discrete values
+          - (value) -> (mean, median, std, cnt, delta, deltaM, min, max) price stats for each discrete value. delta to (Prov+City+Type), deltaM is for Median
+        - ratios: for continues values
+          - (mean, median, std, cnt, min, max): ratio of price/unit to (Prov+City+Type), ratioM is for Median
 
 ### 1.2 Evaluation based on features
 

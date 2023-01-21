@@ -1,5 +1,6 @@
 
 
+from math import isnan
 import time
 from base.base_cfg import BaseCfg
 from numpy import NaN
@@ -141,17 +142,27 @@ def update_records(
     df = df[to_save_col_list].copy()
     df.columns = not_none_db_col_list
     data_to_save = df.to_dict(orient='index')
+    savedCount = 0
     for key, value in data_to_save.items():
         id = key[id_index]
         # logger.debug(f'Updating key: {key} , id: {id}')
+        # only update the columns that are numeric
+        toSet = {}
+        for k, v in value.items():
+            if isinstance(v, (int, float)) and not isnan(v):
+                toSet[k] = v
+        if len(toSet) == 0:
+            # logger.warning(f'Nothing to save for: {id}')
+            continue
         mongodb.updateOne(
             'properties',
             {'_id': id},
-            {'$set': value}
+            {'$set': toSet}
         )
+        savedCount += 1
     end_time = time.time()
     logger.info(
-        f'Saved {df.shape[0]} rows, used: {end_time - start_time}s')
+        f'Saved {savedCount}/{df.shape[0]} rows, used: {end_time - start_time}s')
 
 
 class DataSource:
@@ -531,9 +542,11 @@ class DataSource:
                 #df_grouped.loc[:, c] = NaN
                 df_grouped[c] = NaN
             if yIsSeries:
+                y.name = c
                 df_grouped.loc[y.index, c] = y
             else:
                 df_grouped.loc[y.index, c] = y.loc[:, c]
+                # df_grouped.update(y, join='left', overwrite=True)
         if db_col is not None:
             if isinstance(db_col, str):
                 db_col = [db_col]

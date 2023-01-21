@@ -63,6 +63,9 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         return f"{scale_repr}{self.col}_n"
 
     def load_from_db(self):
+        if self.collection is None:
+            logger.warning('No collection to load from')
+            return None
         record = getMongoClient().findOne(
             self.collection, {"_id": self.__get_db_id()})
         if record:
@@ -70,6 +73,9 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         return self.stats
 
     def save_to_db(self):
+        if self.collection is None:
+            logger.warning('No collection to save to')
+            return None
         record = {
             "_id": self.__get_db_id(),
             "stats": self.stats_,
@@ -79,6 +85,8 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         getMongoClient().save(self.collection, record)
 
     def _save_values(self, col_stats: dict):
+        if self.collection is None:
+            return None
         record = {**col_stats,
                   "_id": self.db_id,
                   "col": self.col,

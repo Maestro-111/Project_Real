@@ -8,7 +8,7 @@ import re
 from math import isnan
 from pyrsistent import v
 
-from base.util import allTypeToFloat, allTypeToInt, stringToInt
+from base.util import allTypeToFloat, allTypeToInt, flattenList, stringToInt
 
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -19,6 +19,7 @@ from base.const import NONE, RENT_PRICE_UPPER_LIMIT, SALE_PRICE_LOWER_LIMIT, UNK
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 from data.estimate_scale import PropertyType, PropertyTypeRegexp
+from transformer.baseline import BaselineTransformer
 from transformer.binary import BinaryTransformer
 from transformer.baths import BthsTransformer
 from transformer.bedrooms import RmsTransformer
@@ -297,9 +298,11 @@ class Preprocessor(TransformerMixin, BaseEstimator):
 
     def __init__(
         self,
-        collection_prefix: str = 'ml_'
+        collection_prefix: str = 'ml_',
+        useBaseline: bool = False,
     ):
-        self.collection_prefix: str = collection_prefix
+        self.collection_prefix = collection_prefix
+        self.useBaseline = useBaseline
 
     def get_feature_columns(
         self,
@@ -313,13 +316,17 @@ class Preprocessor(TransformerMixin, BaseEstimator):
             feature columns
         """
         if all_cols is None:
-            if not hasattr(self.customTransformer) or self.customTransformer is None:
+            if not hasattr(self.customTransformers) or self.customTransformers is None:
                 raise ValueError('No transformer built yet')
         else:
-            self.build_transformer(all_cols)
-        return self.customTransformer.get_feature_names()
+            self.build_transformers(all_cols)
+        cols = []
+        for transformer in self.customTransformers:
+            cols.append(transformer.get_feature_names())
+        # return flatten(cols)
+        return flattenList(cols)
 
-    def build_transformer(self, all_cols):
+    def build_transformers(self, all_cols):
         """Build the transformers.
            The transformers need to work with less columns when the predictions has less data.
 
@@ -443,9 +450,19 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         )
 
         # create the pipeline
-        self.customTransformer = SimpleColumnTransformer(
-            colTransformerParams)
-        return self.customTransformer
+        self.customTransformers = []
+        self.customTransformers.append(SimpleColumnTransformer(
+            colTransformerParams))
+        if self.useBaseline:
+            # baseline transformer, which run on the transformed data from previous step
+            self.customTransformers.append(
+                SimpleColumnTransformer([('baseline', BaselineTransformer(
+                    sale=None,
+                    collection=self.baseline_collection))]
+                )
+            )
+
+        return self.customTransformers
 
     def fit(self, Xdf: pd.DataFrame, y=None):
         """A reference implementation of a fitting function for a transformer.
@@ -463,10 +480,16 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         """
         self.label_collection = self.collection_prefix + 'label'
         self.number_collection = self.collection_prefix + 'number'
+        self.baseline_collection = self.collection_prefix + 'baseline'
 
-        self.build_transformer(Xdf.columns)
-        self.customTransformer.fit(Xdf, y)
+        self.build_transformers(Xdf.columns)
+        # fit the first transformer only
+        self.customTransformers[0].fit(Xdf, y)
         self.n_features_ = Xdf.shape[1]
+        if len(self.customTransformers) == 1:
+            self.fited_all_ = True
+        else:
+            self.fited_all_ = False
         return self
 
     def transform(self, Xdf: pd.DataFrame):
@@ -481,11 +504,18 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         if self.n_features_ is None:
             raise ValueError('The transformer has not been fitted yet.')
 
-        # if self.customTransformer is None:
-        #     self.build_transformer(Xdf.columns)
-        #     self.customTransformer.fit(Xdf)
-        logger.info('Transforming to baseline format')
+        # if self.customTransformers is None:
+        #     self.build_transformers(Xdf.columns)
+        #     self.customTransformers.fit(Xdf)
+        logger.info('Transforming')
         #pd.set_option('mode.chained_assignment', None)
-        Xdf = self.customTransformer.transform(Xdf)
+        Xdf = self.customTransformers[0].transform(Xdf)
+        if len(self.customTransformers) > 1:
+            # fit the second transformer
+            for i in range(1, len(self.customTransformers)):
+                if self.fited_all_ is False:
+                    self.customTransformers[i].fit(Xdf)
+                Xdf = self.customTransformers[i].transform(Xdf)
+            self.fited_all_ = True
         #pd.set_option('mode.chained_assignment', 'warn')
         return Xdf

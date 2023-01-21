@@ -105,7 +105,7 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
         # logger.debug(f'transform dates')
         timer = Timer(self.__class__.__name__, logger)
         nanCount = 0
-        offDNanCount = 0
+        # offDNanCount = 0
         totalCount = 0
         toAddCols = [col for col in self.get_feature_names_out()
                      if col not in X.columns]

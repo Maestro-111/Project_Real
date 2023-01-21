@@ -205,3 +205,7 @@ def expendList(list1, list2):
             list1.append(item)
             addedCounter += 1
     return addedCounter
+
+
+def flattenList(lists):
+    return [item for sublist in lists for item in sublist]

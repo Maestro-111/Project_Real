@@ -62,8 +62,8 @@ class DropRowTransformer(BaseEstimator, TransformerMixin):
         elif self.drop_func is not None:
             retX = X.drop(
                 X.index[X.apply(lambda row: self.drop_func(row), axis=1)], inplace=self.inplace)
-            if self.inplace:
-                retX = X
+            # if self.inplace:
+            #     retX = X
         else:
             raise ValueError('Either drop_cols or drop_func must be specified')
         after_drop_rows = retX.shape[0]

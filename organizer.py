@@ -73,7 +73,7 @@ class Organizer:
             propType=None,  # PropertyType.DETACHED,
             prov='ON',
             area=None,
-            city=None,
+            city='Milton',
             sale=None,
         )
         self.default_sale_scale = EstimateScale(

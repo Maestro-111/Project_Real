@@ -8,6 +8,8 @@ import psutil
 import numpy as np
 import concurrent.futures
 
+MULTI_PROCESS_THRESHOLD = 10000
+
 logger = BaseCfg.getLogger(__name__)
 
 
@@ -46,7 +48,7 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
             elif trans_signature == 5:
                 self.transFunctions_.append(trans)
             else:
-                raise ValueError('Invalid number of parameters in list(tuple)')
+                raise ValueError(f'Invalid number of parameters in list(tuple) {trans_signature}')
             self.transFunctionsByName_[trans[0]] = trans
         return self.transFunctions_
 
@@ -81,7 +83,7 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, X):
-        if self.num_procs == 1:
+        if (self.num_procs == 1) or (X.shape[0] < MULTI_PROCESS_THRESHOLD):
             return _transform(simpleTransformer=self, X=X)
         return self.concurrent_transform(X)
 

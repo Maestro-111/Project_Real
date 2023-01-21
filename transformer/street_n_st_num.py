@@ -70,7 +70,7 @@ class StNumStTransformer(BaseEstimator, TransformerMixin):
             totalCount += 1
             st = row['st-c']
             st_num = row['st_num-n']
-            if isnan(st) or isnan(st_num):
+            if (st is None) or (st_num is None) or isnan(st) or isnan(st_num):
                 nanCount += 1
             X.loc[i, 'st_num-st-n'] = (st + 1) * 100000 + st_num
         if nanCount > 0:

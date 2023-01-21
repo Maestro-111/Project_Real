@@ -59,7 +59,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
 
     def _connect_db(self):
         if hasattr(self, '_db_connected') and self._db_connected:
-            return self._db_connected
+            return getMongoClient()
         if not self.collection:
             logger.warn("No collection specified")
             return
@@ -68,7 +68,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         if not MongoDB.hasIndex(self.collection, 'col'):
             MongoDB.createIndex(self.collection, fields=[
                 ("col", 1), ('i', 1)], unique=True)
-        self._db_connected = MongoDB
+        self._db_connected = True
         return MongoDB
 
     def load_from_db(self):

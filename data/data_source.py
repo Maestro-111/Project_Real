@@ -301,7 +301,19 @@ class DataSource:
         """
         global PROV_CITY_TO_AREA
         query = {'_id': {'$in': id_list}}
-        df_raw_to_predict = read_data_by_query(query, self.col_list)
+        idCount = len(id_list)
+        logger.info(f'query ids: {idCount}')
+        if idCount > 500000: # 500K, query has a limit of 16MB
+            # split query
+            df_raws = []
+            while idCount > 0:
+                query['_id']['$in'] = id_list[:500000]
+                df_raws.append(read_data_by_query(query, self.col_list))
+                id_list = id_list[500000:]
+                idCount = len(id_list)
+            df_raw_to_predict = pd.concat(df_raws)
+        else:
+            df_raw_to_predict = read_data_by_query(query, self.col_list)
         # fill missing area
         df_raw_to_predict['area'] = df_raw_to_predict.apply(
             lambda row: PROV_CITY_TO_AREA.get((row['prov'], row['city']), 'Other'), axis=1)

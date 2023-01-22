@@ -48,7 +48,8 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
             elif trans_signature == 5:
                 self.transFunctions_.append(trans)
             else:
-                raise ValueError(f'Invalid number of parameters in list(tuple) {trans_signature}')
+                raise ValueError(
+                    f'Invalid number of parameters in list(tuple) {trans_signature}')
             self.transFunctionsByName_[trans[0]] = trans
         return self.transFunctions_
 
@@ -109,7 +110,7 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
                 try:
                     df_results.append(result.result())
                 except Exception as ex:
-                    logger.error(str(ex))
+                    logger.error(ex)
                     raise ex
         df_results = pd.concat(df_results)
         # print('after merge========================')

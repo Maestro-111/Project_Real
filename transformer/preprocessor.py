@@ -299,10 +299,10 @@ class Preprocessor(TransformerMixin, BaseEstimator):
     def __init__(
         self,
         collection_prefix: str = 'ml_',
-        useBaseline: bool = False,
+        use_baseline: bool = False,
     ):
         self.collection_prefix = collection_prefix
-        self.useBaseline = useBaseline
+        self.use_baseline = use_baseline
 
     def get_feature_columns(
         self,
@@ -453,7 +453,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         self.customTransformers = []
         self.customTransformers.append(SimpleColumnTransformer(
             colTransformerParams))
-        if self.useBaseline:
+        if self.use_baseline:
             # baseline transformer, which run on the transformed data from previous step
             self.customTransformers.append(
                 SimpleColumnTransformer([('baseline', BaselineTransformer(
@@ -510,12 +510,19 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         logger.info('Transforming')
         #pd.set_option('mode.chained_assignment', None)
         Xdf = self.customTransformers[0].transform(Xdf)
+        self.Xdf = Xdf
         if len(self.customTransformers) > 1:
             # fit the second transformer
             for i in range(1, len(self.customTransformers)):
                 if self.fited_all_ is False:
                     self.customTransformers[i].fit(Xdf)
+                self.Xdf = Xdf  # for debug
+                logger.debug(f'before transform {i}: {Xdf.shape}')
+                logger.debug(Xdf.head())
                 Xdf = self.customTransformers[i].transform(Xdf)
+                logger.debug(f'after transform {i}: {Xdf.shape}')
+                logger.debug(Xdf.head())
+                self.Xdf = Xdf  # for debug
             self.fited_all_ = True
         #pd.set_option('mode.chained_assignment', 'warn')
         return Xdf

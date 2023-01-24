@@ -198,7 +198,7 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
                         return None
                     else:
                         logger.error(
-                            f'{self.col} {value} {type(value)} not in map')
+                            f'{self.col} {value} {type(value)} not in map for category {self.col_category}')
                         return None
                 Xs = X[self.col].apply(_get_category)
                 X.loc[:, self.col_category] = super().transform(Xs)

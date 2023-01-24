@@ -24,7 +24,7 @@ from base.util import dateFromNum
 import numpy as np
 import pandas as pd
 from base.base_cfg import BaseCfg
-from base.const import CONCURRENT_PROCESSES_MAX, DEFAULT_DATE_POINT_DATE, DEFAULT_START_DATA_DATE, PROPERTIES_COLLECTION
+from base.const import CONCURRENT_PROCESSES_MAX, DEFAULT_CITY, DEFAULT_DATE_POINT_DATE, DEFAULT_PROV, DEFAULT_START_DATA_DATE, PROPERTIES_COLLECTION
 from base.mongo import MongoDB
 from base.model_gridfs_store import GridfsStore
 from base.sysDataHelpers import setSysdataTs
@@ -53,8 +53,9 @@ logger = BaseCfg.getLogger(__name__)
 class Organizer:
     """Organizer class for training and predicting models."""
 
-    def __init__(self):
+    def __init__(self, use_baseline: bool = False):
         """Initialize the class."""
+        self.use_baseline = use_baseline
         # connect database / check file system
         self.mongodb = MongoDB()
         self.raw_data: DataFrame = None
@@ -71,9 +72,9 @@ class Organizer:
         self.default_all_scale = EstimateScale(
             datePoint=dateFromNum(DEFAULT_DATE_POINT_DATE),
             propType=None,  # PropertyType.DETACHED,
-            prov='ON',
+            prov=DEFAULT_PROV,
             area=None,
-            city='Milton',
+            city=DEFAULT_CITY,
             sale=None,
         )
         self.default_sale_scale = EstimateScale(
@@ -139,7 +140,7 @@ class Organizer:
         self.__update_status('init transformers', 'run')
         if self.data_source is None:
             self.load_data()
-        self.root_preprocessor = Preprocessor()
+        self.root_preprocessor = Preprocessor(use_baseline=self.use_baseline)
         self.data_source.transform_data(self.root_preprocessor)
         self.__update_status('init transformers', 'done')
 

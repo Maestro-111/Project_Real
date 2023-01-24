@@ -156,19 +156,6 @@ def getUniqueLabels(X: pd.Series) -> list:
     return X.unique().tolist()
 
 
-def printColums(df, start: str = None):
-    cols = []
-    for c in df.columns:
-        if start is not None:
-            if c.startswith(start):
-                cols.append(c)
-        else:
-            cols.append(c)
-    cols.sort()
-    for c in cols:
-        print(c)
-
-
 def debug(fn):
     def wrapper(*args, **kwargs):
         logger.debug(f"Invoking {fn.__name__}")
@@ -209,3 +196,16 @@ def expendList(list1, list2):
 
 def flattenList(lists):
     return [item for sublist in lists for item in sublist]
+
+
+def printColumns(df, start: str = None):
+    cols = []
+    for c in df.columns:
+        if start is not None:
+            if c.startswith(start):
+                cols.append(c)
+        else:
+            cols.append(c)
+    cols.sort()
+    for c in cols:
+        print(f'{c} {df[c].dtype}')

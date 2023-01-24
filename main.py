@@ -38,12 +38,33 @@ search_scale = EstimateScale(
             sale=None,
         )
 
-org = Organizer()
-org.load_data(search_scale)
+org = Organizer(use_baseline=True)
+#org.load_data(search_scale)
+org.load_data()
 org.init_transformers()
-
 org.train_models()
 org.watch_n_predicting()
+
+
+df = org.data_source.df_grouped
+printColumns(df,'bltYr')
+
+
+def printColumns(df, start: str = None):
+    cols = []
+    for c in df.columns:
+        if start is not None:
+            if c.startswith(start):
+                cols.append(c)
+        else:
+            cols.append(c)
+    cols.sort()
+    for c in cols:
+        print(f'{c} {df[c].dtype}')
+
+
+
+
 
 
 org.save_models()
@@ -70,6 +91,19 @@ print ("Current date and time : ")
 print (now.strftime("%Y-%m-%d %H:%M:%S"))
 
 
+
+
+pre = org.root_preprocessor
+baseline = pre.customTransformers[1].transFunctionsByName_['baseline'][1]
+df = baseline.X
+printColumns(df,'sqft')
+df2 = df.dropna(subset='sqft-ratio')
+gby = df.groupby(['prov','city','ptype2-l'])
+gbysqft = gby['sqft-ratio']
+gbysqft.describe()
+gbysqft.aggregate(['mean','median','min','max','std','count'])
+
+gby['sqft-ratio'].describe(include='all',datetime_is_numeric=True)
 
 
 org.data_source.df_raw.shape[0]
@@ -153,17 +187,6 @@ printColums(df)
 # ----------------------------------------------------------
 # other stuff
 
-def printColums(df, start: str = None):
-    cols = []
-    for c in df.columns:
-        if start is not None:
-            if c.startswith(start):
-                cols.append(c)
-        else:
-            cols.append(c)
-    cols.sort()
-    for c in cols:
-        print(c)
 
 
 class A:
@@ -343,7 +366,11 @@ str(20120312)
 df = pd.DataFrame({'points': [14, 19, 9, 21, 25, 29, 20, 0,11],
                    'assists': [5, 7, 7, 9, 12, 9, 9, None,4],
                    'rebounds': [11, 8, 10, 6, 6, 5, 9,4, 12]})
-points = df['points']
+points= df['points']
+df2 = df.where(df['assists'] > 10)
+print(df2)
+print(df2.apply(lambda row: isnan(row['rebounds']),axis=1))
+print(df2.drop(df2.index[df2.apply(lambda row: isnan(row['rebounds']),axis=1)]))
 print(df)
 def fround(v):
   if isnan(v):
@@ -378,3 +405,36 @@ def allTypeToFloat(value):
 txt = '72.37 58.5'
 print(txt.isnumeric())
 allTypeToFloat(txt)
+
+def calc_stats(
+    df,
+    feature_discrete: list[str] = None,
+    feature_continuous: list[str] = None,
+    col: str = 'lp-n'
+):
+    """Calculate statistics for a sorted dataframe.
+
+    Parameters
+    ==========
+    df: pd.DataFrame. Indexed by Prov, Area, City, Type as in data_source.py
+        ( 'saletp-b', 'ptype2-l','prov', 'area', 'city','_id')
+    """
+    stats = {}
+    overall = df[col].describe()
+    stats['overall'] = overall.to_dict()
+    cityDesc = df.groupby(
+        level=['prov', 'area', 'city', 'ptype2-l', 'saletp-b'])[col].describe()
+    return stats, cityDesc
+
+df2 = org.data_source.df_transformed
+
+df2 = df2.mask(df3['sp'] == 0)
+df3 = df2[df2['saletp-b']==0]
+dfg = df3.groupby(['prov', 'area', 'city', 'ptype2-l'])
+result = dfg['tax-n'].describe()
+result[['a','b']] = 0
+df2.groupby(['gr-n'])['lp-n'].describe()
+
+a = ['ab','cde','fg'].
+print(isinstance(None, (int,float)))
+print(isnan(a))

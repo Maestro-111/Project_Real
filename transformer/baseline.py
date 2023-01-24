@@ -4,10 +4,11 @@ from math import isnan
 import re
 import pandas as pd
 import numpy as np
+from base.const import DROP
 from base.base_cfg import BaseCfg
 from base.mongo import getMongoClient
 from base.timer import Timer
-from base.util import dateFromNum
+from base.util import dateFromNum, printColumns
 from sklearn.base import BaseEstimator, TransformerMixin
 from transformer.const_label_map import getLevel
 
@@ -22,7 +23,7 @@ EXT_M = '-blm-n'
 
 
 def findColumnName(df, col):
-    for ext in ['-n', '-b', '-l', '-e', '']:
+    for ext in ['-n', '-b', '-l', '-e-n', '-e', '']:
         if f"{col}{ext}" in df.columns:
             return f"{col}{ext}"
     for colInDf in df.columns:
@@ -39,10 +40,11 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
     ----------
     None
     """
-    discrete_cols = ['cmty', 'gr', 'tgr', 'bdrms',
-                     'br_plus', 'bthrms', 'kch', 'onD-month', ]
+    discrete_cols = ['cmty', 'gr', 'bdrms',
+                     'bthrms', 'kch', 'onD-month', ]
     # continous columns are also for sale properties only. rent properties do not have these columns
     continous_cols = ['flt', 'depth', 'tax', 'mfee', 'bltYr', 'sqft', ]
+    percentiles = [0.05, 0.32, 0.5, 0.68, 0.95]
 
     def __init__(
         self,
@@ -101,13 +103,21 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
         totalCount = 0
         self.stats_ = [{}, {}]
         SP_N = 'sp-n'
+        X = X.copy().loc[X['ptype2-l'] != DROP]
         # X = X.where(X[SP_N] > 0).dropna()
         XX = [None, None]
-        XX[0] = X.loc[(X[SALETP_COL] == 0) & (X[SP_N] > 0)]
-        XX[1] = X.loc[(X[SALETP_COL] == 1) & (X[SP_N] > 0)]
+        XX[0] = X.loc[(X[SALETP_COL] == 0)]
+        XX[0][SP_N].fillna(XX[0]['lp-n'], inplace=True)
+        XX[0] = XX[0].loc[XX[0][SP_N] > 0]
+        if self.sale is None or self.sale == True:
+            XX[1] = X.loc[(X[SALETP_COL] == 1)]
+            XX[1][SP_N].fillna(XX[1]['lpr-n'], inplace=True)
+            XX[1] = XX[1].loc[XX[1][SP_N] > 0]
 
         for i in [0, 1]:
-            self.stats(self.stats_[i], XX[i], SP_N)
+            if XX[i] is None:
+                continue
+            self.stats(self.stats_[i], XX[i], SP_N, i)
         if self.collection is not None:
             self.saveStats()
         timer.stop(totalCount)
@@ -137,6 +147,8 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
             mongo.save(self.collection, record)
             for key in stats:
                 if isinstance(key, tuple):
+                    if key[2] == DROP:
+                        continue
                     cityTypeStats = stats[key]
                     record = {
                         '_id': f"{keyPrefix}:{key[0]}:{key[1]}:{key[2]}",
@@ -144,9 +156,11 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
                         'mean': cityTypeStats['mean'],
                         'std': cityTypeStats['std'],
                         'min': cityTypeStats['min'],
-                        '25%': cityTypeStats['25%'],
+                        '5%': cityTypeStats['5%'],
+                        '32%': cityTypeStats['32%'],
                         '50%': cityTypeStats['50%'],
-                        '75%': cityTypeStats['75%'],
+                        '68%': cityTypeStats['68%'],
+                        '95%': cityTypeStats['95%'],
                         'max': cityTypeStats['max'],
                     }
                     totalRecords += 1
@@ -179,33 +193,33 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
 
         return totalRecords
 
-    def stats(self, stats_, X, SP_N):
+    def stats(self, stats_, X, SP_N, saletp):
         stats_['count'] = X.shape[0]
         startTs = datetime.now()
         dfOverall = X.groupby(
-            ['prov', 'city', 'ptype2-l'])[SP_N].describe()
-        logger.info(
-            f"do stats: {[col for col in X.columns if 'sp' in col]}")
-        logger.info(f"do stats: {dfOverall.head()}")
-        logger.info(X[['sp', SP_N]].head(100))
+            ['prov', 'city', 'ptype2-l'])[SP_N].describe(percentiles=self.percentiles)
+        # logger.info(
+        #     f"do stats: {[col for col in X.columns if 'sp' in col]}")
+        # logger.info(f"do stats: {dfOverall.head()}")
+        # logger.info(X[['sp', SP_N]].head(100))
         for index, row in dfOverall.iterrows():
             key = (index[0], index[1], index[2])  # prov-city-ptype2-l
             dict = row.to_dict()
             dict[FEATURES_KEY] = {}
             stats_[key] = dict
-            logger.info(f"stats: {key} {dict}")
+            # logger.info(f"stats: {key} {dict}")
         for col in self.discrete_cols:
             col_n = self.featureOverallStats(stats_, SP_N, X, col)
             if col_n is None:
                 continue
             self.discreteStats(stats_, X, SP_N, col, col_n)
-        if self.sale == True or self.sale is None:  # rent properties do not have continous columns
+        if saletp == 0:  # rent properties do not have continous columns
             for col in self.continous_cols:
                 col_n = self.featureOverallStats(stats_, SP_N, X, col)
                 if col_n is None:
                     continue
                 self.continousStats(stats_, X, SP_N, col, col_n)
-        onDStats = X['onD'].describe()
+        onDStats = X['onD'].agg(['min', 'max'])
         endOnD = dateFromNum(onDStats['max'])
         startOnD = dateFromNum(onDStats['min'])
         dateSpan = (endOnD - startOnD).days
@@ -223,39 +237,41 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
             logger.warning(f'column {col} not found')
             return col_n
         df = X.groupby(
-            ['prov', 'city', 'ptype2-l'])[col_n].describe()
+            ['prov', 'city', 'ptype2-l'])[col_n].describe(percentiles=self.percentiles)
         for index, row in df.iterrows():
             # prov-city-ptype2-l
             key = (index[0], index[1], index[2])
-            feature_stats = row.to_dict()
-            feature_stats['col'] = col_n
+            featureStats = row.to_dict()
+            featureStats['col'] = col_n
             # stats for each feature
-            stats_[key][FEATURES_KEY][col] = feature_stats
-            # logger.info(f"{col} {key} {feature_stats}")
+            stats_[key][FEATURES_KEY][col] = featureStats
+            # logger.info(f"{col} {key} {featureStats}")
         return col_n
 
     def discreteStats(self, stats_, X, SP_N, col, col_n):
         df = X.groupby(
-            ['prov', 'city', 'ptype2-l', col_n])[SP_N].describe()
+            ['prov', 'city', 'ptype2-l', col_n])[SP_N].describe(percentiles=self.percentiles)
         for index, row in df.iterrows():
+            if index[2] == DROP:
+                continue
             # prov-city-ptype2-l
             key = (index[0], index[1], index[2])
             stats = stats_[key]
-            feature_stats = stats[FEATURES_KEY][col]
-            feature_value_stats = row.to_dict()
-            if VALUES_KEY not in feature_stats:
-                feature_stats[VALUES_KEY] = {}
+            featureStats = stats[FEATURES_KEY][col]
+            featureValueStats = row.to_dict()
+            if VALUES_KEY not in featureStats:
+                featureStats[VALUES_KEY] = {}
             # delta of value to mean
-            feature_mean = feature_stats.get('mean', stats.get('mean', 0))
-            feature_median = feature_stats.get('50%', stats.get('50%', 0))
-            feature_value_mean = feature_value_stats['mean']
-            feature_value_median = feature_value_stats['50%']
+            feature_mean = featureStats.get('mean', stats.get('mean', 0))
+            feature_median = featureStats.get('50%', stats.get('50%', 0))
+            feature_value_mean = featureValueStats['mean']
+            feature_value_median = featureValueStats['50%']
             delta = feature_value_mean - feature_mean
             # delta of value to median
             deltaM = feature_value_median - feature_median
             # debug
-            logger.info(
-                f"discreteStats {col} {key} {feature_mean} {feature_median} {feature_stats}")
+            # logger.debug(
+            #     f"discreteStats {col} {key} {feature_mean} {feature_median} {featureStats}")
             # price/delta ratio by mean
             if delta == 0:
                 ratio = 0
@@ -268,15 +284,14 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
             else:
                 ratioM = (
                     feature_value_median - stats['50%']) / deltaM
-            feature_value_stats['delta'] = delta
-            feature_value_stats['deltaM'] = deltaM
-            feature_value_stats['ratio'] = ratio
-            feature_value_stats['ratioM'] = ratioM
-            feature_stats[VALUES_KEY][index[3]] = feature_value_stats
+            featureValueStats['delta'] = delta
+            featureValueStats['deltaM'] = deltaM
+            featureValueStats['ratio'] = ratio
+            featureValueStats['ratioM'] = ratioM
+            featureStats[VALUES_KEY][index[3]] = featureValueStats
 
     def continousStats(self, stats_, X, SP_N, col, col_n):
         # calculate delta ratio
-        X = X.copy()
         col_n_delta = f"{col}-delta"
         col_n_sp_diff = f"{col}-sp-diff"
         col_n_ratio = f"{col}-ratio"
@@ -298,19 +313,33 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
             # 3. calculate ratio
             if delta != 0:
                 row[col_n_ratio] = sp_diff / delta
-            logger.info(
-                f"ratio {col} {row[col_n_ratio]} {sp_diff} / {delta}({row[col_n]} - {_stats[FEATURES_KEY][col]['mean']})")
+            # logger.debug(
+            #     f"ratio {col} {col_n} {row[col_n_ratio]} {sp_diff} / {delta}({row[col_n]} - {_stats[FEATURES_KEY][col]['mean']})")
             return row
         X = X.apply(_calcRatio, axis=1, result_type='broadcast')
+        self.X = X  # for debug
         # calculate delta ratio stats
+        # remove outliers
+        q1 = X[col_n_ratio].quantile(0.25)
+        q3 = X[col_n_ratio].quantile(0.75)
+        iqrange = q3 - q1
+        lower_bound = q1 - (1.5 * iqrange)
+        upper_bound = q3 + (1.5 * iqrange)
+        X = X[(X[col_n_ratio] > lower_bound) & (X[col_n_ratio] < upper_bound)]
+        # df = X.groupby(
+        #    ['prov', 'city', 'ptype2-l'])[col_n_ratio].describe(include=np.number, percentiles=self.percentiles)
         df = X.groupby(
-            ['prov', 'city', 'ptype2-l'])[col_n_ratio].describe(include=np.number)
+            ['prov', 'city', 'ptype2-l'])[col_n_ratio].aggregate(['mean', 'median', 'min', 'max', 'std', 'count'])
+        # logger.info(f"{col} ratio stats {df.head()}")
+        df['50%'] = df['median']
         for index, row in df.iterrows():
+            if index[2] == DROP:
+                continue
             # prov-city-ptype2-l
             key = (index[0], index[1], index[2])
-            feature_stats = row.to_dict()
+            featureStats = row.to_dict()
             # stats for each feature
-            stats_[key][FEATURES_KEY][col][RATIOS_KEY] = feature_stats
+            stats_[key][FEATURES_KEY][col][RATIOS_KEY] = featureStats
 
     def transform(self, X):
         """Transform X.
@@ -329,25 +358,71 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
         totalCount = 0
         transformedCount = 0
         new_cols = self.get_feature_names_out()
-        X[new_cols] = 0
+        X.loc[:, new_cols] = 0.0
+        printColumns(X)
 
         def _getFeatureStats(row, col, stats):
             featureStats = stats[FEATURES_KEY][col]
             if featureStats is None:
+                logger.warning(f'column {col} not found in featureStats')
                 return None, None
             col_n = featureStats['col']
             if col_n is None:
-                logger.warning(f'column {col} not found in featureStats')
+                logger.warning(f'col {col} not found in featureStats')
                 return None, None
             return featureStats, col_n
+
+        def _addMissingValueStats(featureStatsValues, value, col):
+            if isinstance(value, (int, float)):
+                if value == float(int(value)):
+                    if value == 0:
+                        tryValue1 = value + 1.0
+                        tryValue2 = value + 2.0
+                    else:
+                        tryValue1 = value - 1.0
+                        tryValue2 = value - 2.0
+                    dictValue1 = featureStatsValues.get(tryValue1, None)
+                    dictValue2 = featureStatsValues.get(tryValue2, None)
+                    if dictValue1 is not None and dictValue2 is not None:
+                        featureStatsValues[value] = {
+                            'mean': dictValue1['mean'] - (dictValue2['mean'] - dictValue1['mean']),
+                            '50%': dictValue1['50%'] - (dictValue2['50%'] - dictValue1['50%']),
+                        }
+                        logger.warning(
+                            f'add missing value {value} for column {col} using {tryValue1} and {tryValue2}')
+                        return
+                elif (value - float(int(value))) == 0.5:
+                    tryValue1 = value - 0.5
+                    tryValue2 = value + 0.5
+                    dictValue1 = featureStatsValues.get(tryValue1, None)
+                    dictValue2 = featureStatsValues.get(tryValue2, None)
+                    if dictValue1 is not None and dictValue2 is not None:
+                        featureStatsValues[value] = {
+                            'mean': (dictValue1['mean'] + dictValue2['mean']) / 2.0,
+                            '50%': (dictValue1['50%'] + dictValue2['50%']) / 2.0,
+                        }
+                        logger.warning(
+                            f'add missing value {value} for column {col} betwen {tryValue1} and {tryValue2}')
+                        return
+            featureStatsValues[value] = {'mean': 0, '50%': 0}
+            logger.warning(
+                f'add missing value {value} for column {col} as zero')
 
         def _transformDiscrete(row, col, stats):
             featureStats, col_n = _getFeatureStats(row, col, stats)
             if featureStats is None:
                 return
             # set feature value
+            if featureStats.get(VALUES_KEY, None) is None:
+                logger.warning(
+                    f"column {col} has no valueStats. {featureStats} {row['prov']} {row['city']} {row['ptype2-l']}")
+                return
             valueStats = featureStats[VALUES_KEY].get(row[col_n], None)
             if valueStats is None:
+                logger.warning(
+                    f'column {col} value {row[col_n]} not found in valueStats. {featureStats}')
+                _addMissingValueStats(
+                    featureStats[VALUES_KEY], row[col_n], col)
                 return
             if row[col+EXT_N] != 0:
                 logger.warning(
@@ -363,13 +438,17 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
             ratioStats = featureStats.get(RATIOS_KEY, None)
             if ratioStats is None:
                 return
-            row[col+EXT_N] = ratioStats['mean'] * row[col_n] + stats['mean']
-            row[col+EXT_M] = ratioStats['50%'] * row[col_n] + stats['mean']
+            row[col+EXT_N] = float(ratioStats['mean'] *
+                                   row[col_n] + stats['mean'])
+            row[col+EXT_M] = float(ratioStats['50%'] *
+                                   row[col_n] + stats['mean'])
 
         def _transform(row):
             nonlocal totalCount, transformedCount
             totalCount += 1
             key = (row['prov'], row['city'], row['ptype2-l'])
+            if key[2] == DROP:
+                return row
             saletp = row[SALETP_COL]
             if saletp not in [0, 1]:
                 logger.warning(f'invalid saletp {saletp}')
@@ -385,7 +464,8 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
                 _transformContinuous(row, col, stats)
             transformedCount += 1
             return row
-        X = X.apply(_transform, axis=1, result_type='broadcast')
+        X.apply(_transform, axis=1, result_type='broadcast')
         timer.stop(totalCount)
         logger.info(f'transformed {transformedCount}/{totalCount}')
+        printColumns(X)
         return X

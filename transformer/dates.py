@@ -109,8 +109,9 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
         totalCount = 0
         toAddCols = [col for col in self.get_feature_names_out()
                      if col not in X.columns]
-        X = pd.concat(
-            [X, pd.DataFrame(columns=toAddCols, index=X.index)], axis=1)
+        # X = pd.concat(
+        #     [X, pd.DataFrame(columns=toAddCols, index=X.index)], axis=1)
+        X[toAddCols] = 0
         # hasOffD = 'offD' in X.columns
         # hasSldd = 'sldd' in X.columns
         previous2Year = datetime.datetime.now().year - 2

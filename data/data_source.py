@@ -303,7 +303,7 @@ class DataSource:
         query = {'_id': {'$in': id_list}}
         idCount = len(id_list)
         logger.info(f'query ids: {idCount}')
-        if idCount > 500000: # 500K, query has a limit of 16MB
+        if idCount > 500000:  # 500K, query has a limit of 16MB
             # split query
             df_raws = []
             while idCount > 0:
@@ -455,6 +455,7 @@ class DataSource:
             rd = rd.loc[rd.apply(filter_func, axis=1, result_type='reduce')]
         logger.debug(f'after filter_func {len(rd.index)}')
         if len(rd.index) == 0:
+            logger.debug('index is empty')
             return None
         # sample data
         if sample_size is not None and sample_size < rd.shape[0]:

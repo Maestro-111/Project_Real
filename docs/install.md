@@ -3,8 +3,10 @@
 as root
 '''
 yum install libffi-devel bzip2-devel
+echo 1 > /proc/sys/vm/overcommit_memory
 '''
 
+as user
 '''
 mkdir python3
 curl -O https://www.python.org/ftp/python/3.9.16/Python-3.9.16.tgz

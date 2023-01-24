@@ -72,6 +72,7 @@ class RmBaseEstimateManager:
             scale, model, accuracy, x_cols, x_means, meta = self.train_single_scale(
                 scale)
             if scale is None:
+                self.logger.warning('No scale to train')
                 return
             model_dict = {
                 'model': model,
@@ -159,7 +160,9 @@ class RmBaseEstimateManager:
         filterScale = scale.copy(sale='Both')
         df = self.load_data(df_grouped=df_grouped,
                             scale=filterScale, date_span=-1)
-        if df is None or df.empty:
+        if df is None or (df.shape[0] == 0):
+            self.logger.warning(
+                f'No data found for scale {scale}.')
             return None, None, None
         key = self.__model_key__()
         if key not in scale.meta:

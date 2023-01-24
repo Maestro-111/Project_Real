@@ -51,7 +51,7 @@ class DropRowTransformer(BaseEstimator, TransformerMixin):
         if isinstance(X, np.ndarray):
             X = pd.DataFrame(X, columns=self.columns)
             logger.info('converted np.ndarray to pd.DataFrame')
-        original_rows = X.shape[0]
+        # original_rows = X.shape[0]
         # logger.debug(f'{self.drop_cols} before {original_rows} rows')
         retX = None
         if self.drop_cols is not None:
@@ -60,10 +60,13 @@ class DropRowTransformer(BaseEstimator, TransformerMixin):
             else:
                 retX = X[X[self.drop_cols] != self.as_na_value]
         elif self.drop_func is not None:
-            retX = X.drop(
-                X.index[X.apply(lambda row: self.drop_func(row), axis=1)], inplace=self.inplace)
             if self.inplace:
+                X.drop(
+                    X.index[X.apply(lambda row: self.drop_func(row), axis=1)], inplace=True)
                 retX = X
+            else:
+                retX = X.drop(
+                    X.index[X.apply(lambda row: self.drop_func(row), axis=1)], inplace=False)
             # if self.inplace:
             #     retX = X
         else:

@@ -88,7 +88,7 @@ class MongoDB():
     def updateOne(self, collection, query, update, upsert=None):
         # save to mongo
         update = self.appendMt(update)
-        logger.debug(query, update)
+        # logger.debug(query, update)
         if isinstance(collection, str):
             collection = self.collection(collection)
         if upsert is None:

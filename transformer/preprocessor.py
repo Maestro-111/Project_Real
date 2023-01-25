@@ -299,7 +299,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
     def __init__(
         self,
         collection_prefix: str = 'ml_',
-        use_baseline: bool = False,
+        use_baseline: bool = True,
     ):
         self.collection_prefix = collection_prefix
         self.use_baseline = use_baseline

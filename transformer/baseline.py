@@ -358,7 +358,7 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
         totalCount = 0
         transformedCount = 0
         new_cols = self.get_feature_names_out()
-        X.loc[:, new_cols] = 0.0
+        X.loc[:,new_cols] = 0.0
         printColumns(X)
 
         def _getFeatureStats(row, col, stats):
@@ -453,6 +453,7 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
             if saletp not in [0, 1]:
                 logger.warning(f'invalid saletp {saletp}')
                 return row
+            saletp = int(saletp)
             stats = self.stats_[saletp].get(key, None)
             if stats is None:
                 return row

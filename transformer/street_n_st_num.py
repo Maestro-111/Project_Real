@@ -65,15 +65,17 @@ class StNumStTransformer(BaseEstimator, TransformerMixin):
         timer = Timer('st_num-st', logger)
         nanCount = 0
         totalCount = 0
-        X[self._target_col] = NAN
-        for i, row in X.iterrows():
-            totalCount += 1
-            st = row['st-c']
-            st_num = row['st_num-n']
-            if (st is None) or (st_num is None) or isnan(st) or isnan(st_num):
-                nanCount += 1
-            X.loc[i, 'st_num-st-n'] = (st + 1) * 100000 + st_num
-        if nanCount > 0:
-            logger.warning(f'{nanCount}/{totalCount} nan values in st_num-st')
+        # X[self._target_col] = NAN
+        # for i, row in X.iterrows():
+        #     totalCount += 1
+        #     st = row['st-c']
+        #     st_num = row['st_num-n']
+        #     if (st is None) or (st_num is None) or isnan(st) or isnan(st_num):
+        #         nanCount += 1
+        #     X.loc[i, 'st_num-st-n'] = (st + 1) * 100000 + st_num
+        X[self._target_col] = X['st-c'].astype(
+            int, errors='ignore') * 100000 + X['st_num-n'].astype(int, errors='ignore')
+        logger.info(
+            f'{X[self._target_col].isna().sum()}/{X.shape[0]} nan values in st_num-st')
         timer.stop(totalCount)
         return X

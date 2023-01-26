@@ -2,6 +2,7 @@
 from base.base_cfg import BaseCfg
 from base.const import CONCURRENT_PROCESSES_MAX
 from base.timer import Timer
+from base.util import getMemoryLimitedExtraProcessNumber
 from sklearn.base import BaseEstimator, TransformerMixin
 import pandas as pd
 import psutil
@@ -92,7 +93,8 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
         num_procs = min((psutil.cpu_count(logical=False) - 1),
                         CONCURRENT_PROCESSES_MAX,
                         self.num_procs,
-                        len(X.index))
+                        len(X.index),
+                        (getMemoryLimitedExtraProcessNumber()+1))
         logger.info(f'num_procs: {num_procs}')
         timer = Timer(f'transform', logger)
         df_results = []

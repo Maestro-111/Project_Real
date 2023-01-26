@@ -147,16 +147,16 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
         cols_to_add = [col for col in new_cols if col not in X.columns]
         X[cols_to_add] = 0
 
-        def _set_value(value, i):
+        def _set_value(value, row):
             nonlocal error_count
             col_name = self.map_.get(value, default_col_name)
             if isinstance(col_name, list):
                 for col_name_item in col_name:
                     #X.loc[i, (self.col+'-'+col_name_item)] = 1
-                    X.loc[i, col_name_item] = 1
+                    row[col_name_item] = 1
             elif isinstance(col_name, str):
                 #X.loc[i, (self.col+'-'+col_name)] = 1
-                X.loc[i, col_name] = 1
+                row[col_name] = 1
             elif isNanOrNone(value):
                 pass
             else:
@@ -169,22 +169,25 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
 
         if self.col in X.columns:
             # set value column(s)
-            for i, row in X.iterrows():
+            def _transform(row):
+                nonlocal list_value_count, str_value_count, error_count, self
                 value = row[self.col]
                 if isinstance(value, list):
                     for v in value:
-                        _set_value(v, i)
+                        _set_value(v, row)
                         list_value_count += 1
                 elif isinstance(value, str) or isinstance(value, int):
                     # sometimes the value is int
-                    _set_value(value, i)
+                    _set_value(value, row)
                     str_value_count += 1
                 elif isNanOrNone(value):
-                    continue
+                    pass
                 else:
                     logger.error(
-                        f'{self.col} {value} {type(value)} not in map at row: {i}')
+                        f'{self.col} {value} {type(value)} not in map')
                     error_count += 1
+                return row
+            X = X.apply(_transform, axis=1)
 
             # set category column
             if self.col_category is not None:

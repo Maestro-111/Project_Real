@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 from math import isnan
 from datetime import datetime, timezone
+import psutil
+
 UTC_OFFSET_TIMEDELTA = datetime.utcnow() - datetime.now()
 
 logger = BaseCfg.getLogger(__name__)
@@ -105,7 +107,7 @@ def stringToInt(value):
 
 def ymdFromNum(dayNum):
     if isnan(dayNum):
-        return None
+        return None, None, None
     dayNum = int(dayNum)
     day = dayNum % 100
     year = dayNum // 10000
@@ -125,7 +127,15 @@ def ymdFromNum(dayNum):
 
 def dateFromNum(dayNum):
     year, month, day = ymdFromNum(dayNum)
+    if year is None:
+        return None
     return datetime(year, month, day, 0, 0)
+
+
+def dateFromNumOrNow(dayNum):
+    if isnan(dayNum):
+        return datetime.now()
+    return dateFromNum(dayNum)
 
 
 def daysOfDifferenceFromNumRough(date1: int, date2: int) -> int:
@@ -209,3 +219,16 @@ def printColumns(df, start: str = None):
     cols.sort()
     for c in cols:
         print(f'{c} {df[c].dtype}')
+
+
+def getMemoryUsage():
+    # Getting all memory using os.popen()
+    mem = psutil.virtual_memory()
+    # Memory usage
+    print(mem)
+    return mem[0], mem[3], mem[4]
+
+
+def getMemoryLimitedExtraProcessNumber():
+    total_memory, used_memory, free_memory = getMemoryUsage()
+    return int(free_memory / used_memory)

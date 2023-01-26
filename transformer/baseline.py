@@ -40,7 +40,7 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
     ----------
     None
     """
-    discrete_cols = ['cmty', 'gr', 'bdrms',
+    discrete_cols = ['cmty', 'gr', 'bdrms', 'br_plus',
                      'bthrms', 'kch', 'onD-month', ]
     # continous columns are also for sale properties only. rent properties do not have these columns
     continous_cols = ['flt', 'depth', 'tax', 'mfee', 'bltYr', 'sqft', ]
@@ -316,7 +316,7 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
             # logger.debug(
             #     f"ratio {col} {col_n} {row[col_n_ratio]} {sp_diff} / {delta}({row[col_n]} - {_stats[FEATURES_KEY][col]['mean']})")
             return row
-        X = X.apply(_calcRatio, axis=1, result_type='broadcast')
+        X = X.apply(_calcRatio, axis=1)
         self.X = X  # for debug
         # calculate delta ratio stats
         # remove outliers
@@ -358,7 +358,7 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
         totalCount = 0
         transformedCount = 0
         new_cols = self.get_feature_names_out()
-        X.loc[:,new_cols] = 0.0
+        X.loc[:, new_cols] = 0.0
         printColumns(X)
 
         def _getFeatureStats(row, col, stats):
@@ -465,7 +465,7 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
                 _transformContinuous(row, col, stats)
             transformedCount += 1
             return row
-        X.apply(_transform, axis=1, result_type='broadcast')
+        X = X.apply(_transform, axis=1)
         timer.stop(totalCount)
         logger.info(f'transformed {transformedCount}/{totalCount}')
         printColumns(X)

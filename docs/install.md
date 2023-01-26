@@ -4,6 +4,7 @@ as root
 '''
 yum install libffi-devel bzip2-devel
 echo 1 > /proc/sys/vm/overcommit_memory
+yum install gcc gcc-c++ zlib-devel zlib-static openssl-devel openssl-static
 '''
 
 as user

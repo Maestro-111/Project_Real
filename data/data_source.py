@@ -362,7 +362,7 @@ class DataSource:
         else:
             self.scale.buildAllSubScales(PROV_CITY_TO_AREA_DF)
 
-    def transform_data(self, preprocessor: Preprocessor = None):
+    def transform_data(self, preprocessor: Preprocessor = None, clear_data: bool = True):
         """ Transform data with preprocessor then group them.
         If raw data is not loaded, load it first.
         Args:
@@ -385,6 +385,9 @@ class DataSource:
             ascending=[True, True, True, True, True],
             inplace=False,
         )
+        if clear_data:
+            self.df_raw = None
+            self.df_transformed = None
         return self.df_grouped
 
     # @debug
@@ -558,7 +561,7 @@ class DataSource:
                 y.name = c
                 df_grouped.loc[y.index, c] = y
             else:
-                df_grouped.loc[y.index, c] = y.loc[:, c]
+                df_grouped.loc[y.index, c] = y.loc[y.index, c]
                 # df_grouped.update(y, join='left', overwrite=True)
         if db_col is not None:
             if isinstance(db_col, str):

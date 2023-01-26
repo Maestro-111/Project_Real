@@ -53,9 +53,10 @@ logger = BaseCfg.getLogger(__name__)
 class Organizer:
     """Organizer class for training and predicting models."""
 
-    def __init__(self, use_baseline: bool = False):
+    def __init__(self, use_baseline: bool = False, clear_data: bool = True):
         """Initialize the class."""
         self.use_baseline = use_baseline
+        self.clear_data = clear_data
         # connect database / check file system
         self.mongodb = MongoDB()
         self.raw_data: DataFrame = None
@@ -141,7 +142,8 @@ class Organizer:
         if self.data_source is None:
             self.load_data()
         self.root_preprocessor = Preprocessor(use_baseline=self.use_baseline)
-        self.data_source.transform_data(self.root_preprocessor)
+        self.data_source.transform_data(
+            self.root_preprocessor, self.clear_data)
         self.__update_status('init transformers', 'done')
 
     def train_models(self):
@@ -248,8 +250,14 @@ class Organizer:
             cursor = self.mongodb.collection(
                 PROPERTIES_COLLECTION).find(query, {'_id': 1})
             available_ids = [doc['_id'] for doc in cursor]
+            # split results into multiple batches to save memory and speed up.
+            # 1M use 20~30GB memory. 100k would be a good batch size.
             # predict and save to database
-            self.predict(available_ids, True)
+            while available_ids:
+                batch_ids = available_ids[:100000]
+                available_ids = available_ids[100000:]
+                self.predict(batch_ids, True)
+            # self.predict(available_ids, True)
             # update resume_token
             save_resume_token(resume_token)
         else:

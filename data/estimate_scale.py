@@ -230,7 +230,7 @@ class EstimateScale:
         for key in ['prov', 'area', 'city']:
             if self.__dict__[key]:
                 keys.append(str(self.__dict__[key]))
-        if self.sale:
+        if self.sale is True:
             keys.append('Sale')
         elif self.sale is False:
             keys.append('Rent')

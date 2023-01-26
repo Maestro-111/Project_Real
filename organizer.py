@@ -209,14 +209,13 @@ class Organizer:
             for em in estimate_manager.values():
                 # model level
                 logger.info(
-                    f'-------------predict {em.name} {em.model_name} ----------------------------')
+                    f'-------------predict {em.name} {em.model_name} {df_grouped.shape[0]}----------------------------')
                 df_y, y_col_names, y_db_col_names = em.estimate(df_grouped)
                 if df_y is None:
                     continue
-                logger.info(
-                    f"predict {em.name} {em.model_name} {y_col_names}:")
                 logger.info(df_y)
-                logger.info('-----------------------------------------')
+                logger.info(
+                    f'-----------------predict done: {em.name} {em.model_name} {df_y.shape[0]}/{df_grouped.shape[0]}------------------------')
                 # merge the prediction to the original data
                 # df_grouped = pd.merge(
                 #     df_grouped, df_y, how='left', left_index=True, right_index=True)

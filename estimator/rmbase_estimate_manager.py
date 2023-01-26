@@ -38,6 +38,7 @@ class RmBaseEstimateManager:
     Parameters
     ==========
     DataSource: data.data_source.DataSource
+    estimate_both: bool = False. True for both sale and rent.
     """
 
     def __init__(
@@ -45,11 +46,13 @@ class RmBaseEstimateManager:
         data_source: DataSource,
         name: str = None,
         model_class: str = MODEL_TYPE_REGRESSION,
+        estimate_both: bool = False,
     ) -> None:
         self.data_source = data_source
         self.name = name
         self.model_class = model_class
         self.logger = BaseCfg.getLogger(name or self.__class__.__name__)
+        self.estimate_both = estimate_both
         pass
 
     def load_scales(self, sale: bool = None) -> None:
@@ -157,7 +160,10 @@ class RmBaseEstimateManager:
         # load data:
         # date_span=-1 means do not filter by date
         # sale is set to both to load all data
-        filterScale = scale.copy(sale='Both')
+        if self.estimate_both:
+            filterScale = scale.copy(sale='Both')
+        else:
+            filterScale = scale
         df = self.load_data(df_grouped=df_grouped,
                             scale=filterScale, date_span=-1)
         if df is None or (df.shape[0] == 0):

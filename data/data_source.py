@@ -553,6 +553,7 @@ class DataSource:
         if not isinstance(col, list):
             raise Exception(
                 f'col must be str or list[str], but got {type(col)}')
+        # self.y = y  # for debug
         for c in col:
             if c not in df_grouped.columns:
                 #df_grouped.loc[:, c] = NaN

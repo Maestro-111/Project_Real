@@ -26,11 +26,13 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         data_source,
         name,
         model_params,
+        estimate_both: bool = None,
     ):
         super().__init__(
             data_source,
             name,
             model_class=MODEL_TYPE_REGRESSION,
+            estimate_both=estimate_both,
         )
         self.model_params = model_params
 

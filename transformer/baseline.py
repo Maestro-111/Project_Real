@@ -68,20 +68,6 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
             [f"{col}{EXT_M}" for col in self.continous_cols]
         return self.discrete_new_cols + self.continous_new_cols
 
-    def _connect_db(self):
-        if hasattr(self, '_db_connected') and self._db_connected:
-            return self._db_connected
-        if not self.collection:
-            logger.warn("No collection specified")
-            return
-        # create index on col
-        MongoDB = getMongoClient()
-        if not MongoDB.hasIndex(self.collection, 'col'):
-            MongoDB.createIndex(self.collection, fields=[
-                ("col", 1), ('i', 1)], unique=True)
-        self._db_connected = MongoDB
-        return MongoDB
-
     def fit(self, X, y=None):
         """Fit the model according to the given training data.
 

@@ -65,7 +65,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
             return
         # create index on col
         MongoDB = getMongoClient()
-        if not MongoDB.hasIndex(self.collection, 'col'):
+        if not MongoDB.hasIndex(self.collection, 'col_1_i_1'):
             MongoDB.createIndex(self.collection, fields=[
                 ("col", 1), ('i', 1)], unique=True)
         self._db_connected = True

@@ -50,6 +50,7 @@ class RentLgbmManager(LgbmEstimateManager):
             data_source,
             name=ESTIMATOR_NAME,
             model_params=None,
+            estimate_both=True,
         )
 
     def load_scales(self, sale: bool = None) -> None:

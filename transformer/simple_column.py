@@ -85,16 +85,16 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, X):
-        if (self.num_procs == 1) or (X.shape[0] < MULTI_PROCESS_THRESHOLD):
-            return _transform(simpleTransformer=self, X=X)
-        return self.concurrent_transform(X)
-
-    def concurrent_transform(self, X):
         num_procs = min((psutil.cpu_count(logical=False) - 1),
                         CONCURRENT_PROCESSES_MAX,
                         self.num_procs,
                         len(X.index),
                         (getMemoryLimitedExtraProcessNumber()+1))
+        if (num_procs == 1) or (X.shape[0] < MULTI_PROCESS_THRESHOLD):
+            return _transform(simpleTransformer=self, X=X)
+        return self.concurrent_transform(X, num_procs)
+
+    def concurrent_transform(self, X, num_procs):
         logger.info(f'num_procs: {num_procs}')
         timer = Timer(f'transform', logger)
         df_results = []

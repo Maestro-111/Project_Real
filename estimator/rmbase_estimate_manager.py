@@ -365,7 +365,8 @@ class RmBaseEstimateManager:
         return self.pred_accuracy_score
 
     def round_result(self, y_pred: Union[pd.Series, pd.DataFrame, np.ndarray], col: str = None):
-        fnRound = getRoundFunction(getattr(self, 'roundBy', 1))
+        fnRound = getRoundFunction(
+            getattr(self, 'roundBy', 1), positiveOnly=True)
         if isinstance(y_pred, pd.Series):
             y_pred = y_pred.map(fnRound)
         elif isinstance(y_pred, pd.DataFrame):

@@ -181,11 +181,14 @@ def columnValues(df: pd.DataFrame, col: str) -> list:
     return df[col].unique().tolist()
 
 
-def getRoundFunction(n=1):
+def getRoundFunction(n=1, positiveOnly=False):
     def roundByN(value):
         if isnan(value):
             return value
-        return int(round(value / n) * n)
+        retValue = int(round(value / n) * n)
+        if positiveOnly and retValue < 0:
+            return None
+        return retValue
     return roundByN
 
 

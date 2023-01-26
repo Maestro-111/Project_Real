@@ -85,6 +85,10 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, X):
+        # add columns for targetCol if not exist
+        cols = self.get_feature_names()
+        to_add_cols = [col for col in cols if col not in X.columns]
+        X[to_add_cols] = np.nan
         num_procs = min((psutil.cpu_count(logical=False) - 1),
                         CONCURRENT_PROCESSES_MAX,
                         self.num_procs,

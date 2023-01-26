@@ -139,7 +139,10 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
 
         totalCount = X.shape[0]
         onDNanCount = X['onD'].isna().sum()
-        offDNanCount = X['offD'].isna().sum()
+        if self.offD:
+            offDNanCount = X['offD'].isna().sum()
+        else:
+            offDNanCount = 0
         logger.info(
             f'onD|offD is None: {onDNanCount}|{offDNanCount}/{totalCount}')
         timer.stop(totalCount)

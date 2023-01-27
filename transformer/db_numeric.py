@@ -52,7 +52,7 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         self.na_value = na_value
         self.scale = scale
 
-    def get_feature_names(self):
+    def get_feature_names_out(self):
         return [self.col+'-n']
 
     def __get_db_id(self):

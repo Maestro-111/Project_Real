@@ -89,15 +89,15 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
         totalCount = 0
         self.stats_ = [{}, {}]
         SP_N = 'sp-n'
-        X = X.copy().loc[X['ptype2-l'] != DROP]
+        X = X.loc[X['ptype2-l'] != DROP]
         # X = X.where(X[SP_N] > 0).dropna()
         XX = [None, None]
         XX[0] = X.loc[(X[SALETP_COL] == 0)]
-        XX[0][SP_N].fillna(XX[0]['lp-n'], inplace=True)
+        XX[0] = XX[0].fillna({SP_N: XX[0]['lpr-n']})
         XX[0] = XX[0].loc[XX[0][SP_N] > 0]
         if self.sale is None or self.sale == True:
             XX[1] = X.loc[(X[SALETP_COL] == 1)]
-            XX[1][SP_N].fillna(XX[1]['lpr-n'], inplace=True)
+            XX[1] = XX[1].fillna({SP_N: XX[1]['lpr-n']})
             XX[1] = XX[1].loc[XX[1][SP_N] > 0]
 
         for i in [0, 1]:

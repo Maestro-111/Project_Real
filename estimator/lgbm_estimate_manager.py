@@ -1,5 +1,6 @@
 from base.const import MODEL_TYPE_REGRESSION, TRAINING_MIN_ROWS
 from base.timer import Timer
+from base.util import logDataframeChange
 from data.estimate_scale import EstimateScale
 from estimator.rmbase_estimate_manager import RmBaseEstimateManager
 import lightgbm as lgb
@@ -27,12 +28,16 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         name,
         model_params,
         estimate_both: bool = None,
+        min_output_value: float = None,
+        max_output_value: float = None,
     ):
         super().__init__(
             data_source,
             name,
             model_class=MODEL_TYPE_REGRESSION,
             estimate_both=estimate_both,
+            min_output_value=min_output_value,
+            max_output_value=max_output_value,
         )
         self.model_params = model_params
 
@@ -49,19 +54,21 @@ class LgbmEstimateManager(RmBaseEstimateManager):
     ):
         """ Filter data for LGBMRegressor """
         # X = X.copy()
-        rowsBefore = X.shape[0]
-        colsBefore = X.shape[1]
+        origX = X
+        # rowsBefore = X.shape[0]
+        # colsBefore = X.shape[1]
         # remove columns with all NaN
         X.dropna(axis='columns', how='all', inplace=True)
         # remove columns with all zeros
         X = X.loc[:, (X != 0).any(axis=0)]
         # remove rows with NaN
-        X.dropna(inplace=True)
-        rowsAfter = len(X.index)
-        colsAfter = X.shape[1]
-        self.logger.info(
-            f'''*{self.name}* Rows dropped: {rowsBefore-rowsAfter}/{rowsBefore}=>{rowsAfter}
-            Cols dropped: {colsBefore-colsAfter}/{colsBefore}=>{colsAfter}''')
+        X = X.dropna()
+        # rowsAfter = len(X.index)
+        # colsAfter = X.shape[1]
+        # self.logger.info(
+        #     f'''*{self.name}* Rows dropped: {rowsBefore-rowsAfter}/{rowsBefore}=>{rowsAfter} \
+        #     Cols dropped: {colsBefore-colsAfter}/{colsBefore}=>{colsAfter}''')
+        logDataframeChange(origX, X, self.logger, self.name)
         return X
 
     def train_single_scale(self, scale: EstimateScale) -> tuple[EstimateScale, object, float, list[str], dict]:
@@ -76,11 +83,21 @@ class LgbmEstimateManager(RmBaseEstimateManager):
             self.logger.info(
                 '------------------------------------------------')
             return (None, None, None, None, None, None)
-        df_train, df_test = train_test_split(
-            df, test_size=0.15, random_state=10)
         model = self.prepare_model()
         x_cols, y_col, x_means = self.get_x_y_columns(df)
+        df = self.filter_data_outranged(df, y_col=y_col)
+        if df.shape[0] < TRAINING_MIN_ROWS:
+            self.logger.info(
+                '================================================')
+            self.logger.warning(
+                f'{str(scale)} {str(self.model_name)} No enough data for training after filter. {df.shape[0]} rows')
+            self.logger.info(
+                '------------------------------------------------')
+            return (None, None, None, None, None, None)
+        df_train, df_test = train_test_split(
+            df, test_size=0.15, random_state=10)
         model.fit(df_train[x_cols], df_train[y_col])
+        self.fit_output_min_max(df[y_col])
         accuracy = self.test_accuracy(
             model, df_test[x_cols], df_test[y_col])
         timer.stop(df_train.shape[0])

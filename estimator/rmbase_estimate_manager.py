@@ -5,7 +5,7 @@ from typing import Union
 from base.base_cfg import BaseCfg
 from base.const import MODEL_TYPE_CLASSIFICATION, MODEL_TYPE_REGRESSION
 from base.model_store import ModelStore
-from base.util import expendList, getRoundFunction
+from base.util import expendList, getRoundFunction, logDataframeChange
 from data.data_source import DataSource
 import pandas as pd
 import numpy as np
@@ -47,12 +47,16 @@ class RmBaseEstimateManager:
         name: str = None,
         model_class: str = MODEL_TYPE_REGRESSION,
         estimate_both: bool = False,
+        min_output_value: float = 0,
+        max_output_value: float = 1000000000,
     ) -> None:
         self.data_source = data_source
         self.name = name
         self.model_class = model_class
         self.logger = BaseCfg.getLogger(name or self.__class__.__name__)
         self.estimate_both = estimate_both
+        self.min_output_value = min_output_value
+        self.max_output_value = max_output_value
         pass
 
     def load_scales(self, sale: bool = None) -> None:
@@ -347,13 +351,13 @@ class RmBaseEstimateManager:
                 x_numeric_columns.append(col)
                 if col == y_column:
                     y_numeric_column = col
-                elif col.startswith(y_column) and col[-2:] in ['-b', '-n', '-c']:
+                elif col.startswith(y_column) and (col[-2:] in ['-b', '-n', '-c']) and ('-bl-' not in col) and ('-blm-' not in col):
                     y_numeric_column = col
         if y_numeric_column is None:
             raise ValueError(f'Column {y_column} is not numeric.')
         x_numeric_columns.remove(y_numeric_column)
-        self.logger.info(
-            f'*{self.name}* X: {x_numeric_columns} y: {y_numeric_column}')
+        # self.logger.info(
+        #     f'*{self.name}* X: {x_numeric_columns} y: {y_numeric_column}')
         x_means = df[x_numeric_columns].mean().to_dict()
         return x_numeric_columns, y_numeric_column, x_means
 
@@ -366,7 +370,10 @@ class RmBaseEstimateManager:
 
     def round_result(self, y_pred: Union[pd.Series, pd.DataFrame, np.ndarray], col: str = None):
         fnRound = getRoundFunction(
-            getattr(self, 'roundBy', 1), positiveOnly=True)
+            getattr(self, 'roundBy', 1),
+            min=self.min_output_value_ or self.min_output_value,
+            max=self.max_output_value_ or self.max_output_value,
+        )
         if isinstance(y_pred, pd.Series):
             y_pred = y_pred.map(fnRound)
         elif isinstance(y_pred, pd.DataFrame):
@@ -377,6 +384,31 @@ class RmBaseEstimateManager:
         else:
             raise ValueError(f'Unknown type: {type(y_pred)}')
         return y_pred
+
+    def fit_output_min_max(self, y: pd.Series):
+        """ use standard distribution to calculate the soft min and max output values.
+        """
+        stats = y.agg(['min', 'max', 'mean', 'std']).to_dict()
+        min_output_value = min(
+            stats['min'], stats['mean'] - 3 * stats['std'])
+        if self.min_output_value < min_output_value:
+            self.min_output_value_ = min_output_value
+        else:
+            self.min_output_value_ = self.min_output_value
+        max_output_value = max(
+            stats['max'], stats['mean'] + 3 * stats['std'])
+        if self.max_output_value > max_output_value:
+            self.max_output_value_ = max_output_value
+        else:
+            self.max_output_value_ = self.max_output_value
+
+    def filter_data_outranged(self, df: pd.DataFrame, y_col: str) -> pd.DataFrame:
+        """Filter data within hard min/max limit."""
+        returnDf = df[(df[y_col] >= self.min_output_value) &
+                      (df[y_col] <= self.max_output_value)]
+        logDataframeChange(df, returnDf, self.logger,
+                           f'filter_data_outranged({self.min_output_value}/{self.max_output_value}@{y_col})')
+        return returnDf
 
     def get_score(self, y_true, y_pred) -> float:
         """Get the accuracy score."""

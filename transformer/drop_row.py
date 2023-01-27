@@ -37,7 +37,7 @@ class DropRowTransformer(BaseEstimator, TransformerMixin):
         self.columns = columns
         self.inplace = inplace
 
-    def get_feature_names(self):
+    def get_feature_names_out(self):
         return self.columns
 
     def fit(self, X, y=None):

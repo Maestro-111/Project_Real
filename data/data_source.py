@@ -149,7 +149,7 @@ def update_records(
         # only update the columns that are numeric
         toSet = {}
         for k, v in value.items():
-            if isinstance(v, (int, float)) and not isnan(v):
+            if isinstance(v, (int, float)) and not isnan(v) and v != 0:
                 toSet[k] = v
         if len(toSet) == 0:
             # logger.warning(f'Nothing to save for: {id}')

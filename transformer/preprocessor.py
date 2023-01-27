@@ -322,7 +322,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
             self.build_transformers(all_cols)
         cols = []
         for transformer in self.customTransformers:
-            cols.append(transformer.get_feature_names())
+            cols.append(transformer.get_feature_names_out())
         # return flatten(cols)
         return flattenList(cols)
 

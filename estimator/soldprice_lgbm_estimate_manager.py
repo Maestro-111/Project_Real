@@ -40,6 +40,8 @@ class SoldPriceLgbmEstimateManager(LgbmEstimateManager):
             data_source,
             name=ESTIMATOR_NAME,
             model_params=None,
+            min_output_value=20000,
+            max_output_value=10000000,
         )
 
     def load_scales(self, sale: bool = None) -> None:

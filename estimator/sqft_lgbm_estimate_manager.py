@@ -35,6 +35,8 @@ class SqftLgbmEstimateManager(LgbmEstimateManager, WritebackMixin):
             data_source,
             name=ESTIMATOR_NAME,
             model_params=None,
+            min_output_value=150,
+            max_output_value=100000,
         )
 
     def my_load_data(self, scale: EstimateScale = None) -> pd.DataFrame:

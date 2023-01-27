@@ -1,3 +1,4 @@
+from datetime import datetime
 from base.timer import Timer
 from base.util import dateToNum
 from data.estimate_scale import EstimateScale
@@ -35,6 +36,8 @@ class BuiltYearLgbmManager(LgbmEstimateManager, WritebackMixin):
             data_source,
             name=ESTIMATOR_NAME,
             model_params=None,
+            min_output_value=1800,
+            max_output_value=datetime.now().year,
         )
 
     def my_load_data(self, scale: EstimateScale = None) -> pd.DataFrame:

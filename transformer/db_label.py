@@ -49,7 +49,7 @@ class DbLabelTransformer(TransformerMixin, BaseEstimator):
         self.col = col
         self.na_value = na_value
 
-    def get_feature_names(self):
+    def get_feature_names_out(self):
         return [self.col+'-c']
 
     def set_params(self, **params):

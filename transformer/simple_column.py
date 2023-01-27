@@ -2,7 +2,7 @@
 from base.base_cfg import BaseCfg
 from base.const import CONCURRENT_PROCESSES_MAX
 from base.timer import Timer
-from base.util import getMemoryLimitedExtraProcessNumber
+from base.util import addColumns, getMemoryLimitedExtraProcessNumber
 from sklearn.base import BaseEstimator, TransformerMixin
 import pandas as pd
 import psutil
@@ -54,17 +54,22 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
             self.transFunctionsByName_[trans[0]] = trans
         return self.transFunctions_
 
-    def get_feature_names(self) -> list[str]:
+    def get_feature_names_out(self) -> list[str]:
         self._target_cols = []
         self._build_internal_trans_func()
         for name, func, col, targetCol, preTransform in self.transFunctions_:
+            addedCols = False
             if targetCol:
                 self._target_cols.append(targetCol)
-            elif hasattr(func, 'get_feature_names'):
-                self._target_cols.extend(func.get_feature_names())
-            else:
+                addedCols = True
+            if hasattr(func, 'get_feature_names_out'):
+                cols = func.get_feature_names_out()
+                if cols is not None:
+                    self._target_cols.extend(cols)
+                    addedCols = True
+            if not addedCols:
                 logger.warning(
-                    f'No targetCol or get_feature_names for {name} input column {col}')
+                    f'No targetCol or get_feature_names_out for {name} input column {col}')
         return self._target_cols
 
     def fit(self, X, y=None):
@@ -86,9 +91,9 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
 
     def transform(self, X):
         # add columns for targetCol if not exist
-        cols = self.get_feature_names()
+        cols = self.get_feature_names_out()
         to_add_cols = [col for col in cols if col not in X.columns]
-        X[to_add_cols] = np.nan
+        X = addColumns(X, to_add_cols, float('nan'))
         num_procs = min((psutil.cpu_count(logical=False) - 1),
                         CONCURRENT_PROCESSES_MAX,
                         self.num_procs,

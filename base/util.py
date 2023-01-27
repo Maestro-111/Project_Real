@@ -181,13 +181,13 @@ def columnValues(df: pd.DataFrame, col: str) -> list:
     return df[col].unique().tolist()
 
 
-def getRoundFunction(n=1, positiveOnly=False):
+def getRoundFunction(n=1, min=0, max=1000000, outRangeValue=0):
     def roundByN(value):
         if isnan(value):
             return value
         retValue = int(round(value / n) * n)
-        if positiveOnly and retValue < 0:
-            return None
+        if retValue < min or retValue > max:
+            return outRangeValue
         return retValue
     return roundByN
 
@@ -235,3 +235,19 @@ def getMemoryUsage():
 def getMemoryLimitedExtraProcessNumber():
     total_memory, used_memory, free_memory = getMemoryUsage()
     return int(free_memory / used_memory)
+
+
+def addColumns(df: pd.DataFrame, colNames: list[str], value=None):
+    new_columns = pd.DataFrame(
+        {col: value for col in colNames}, index=df.index)
+    return pd.concat([df, new_columns], axis=1)
+
+
+def logDataframeChange(df1: pd.DataFrame, df2: pd.DataFrame, logger, message: str = ''):
+    rowsBefore = len(df1.index)
+    colsBefore = df1.shape[1]
+    rowsAfter = len(df2.index)
+    colsAfter = df2.shape[1]
+    logger.info(
+        f'{message} Rows dropped: {rowsBefore-rowsAfter}/{rowsBefore}=>{rowsAfter} \
+Cols dropped: {colsBefore-colsAfter}/{colsBefore}=>{colsAfter}')

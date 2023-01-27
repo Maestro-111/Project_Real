@@ -143,6 +143,7 @@ def update_records(
     df.columns = not_none_db_col_list
     data_to_save = df.to_dict(orient='index')
     savedCount = 0
+    lastToSet = {}
     for key, value in data_to_save.items():
         id = key[id_index]
         # logger.debug(f'Updating key: {key} , id: {id}')
@@ -159,10 +160,11 @@ def update_records(
             {'_id': id},
             {'$set': toSet}
         )
+        lastToSet = toSet
         savedCount += 1
     end_time = time.time()
     logger.info(
-        f'Saved {savedCount}/{df.shape[0]} rows, used: {end_time - start_time}s')
+        f'Saved {savedCount}/{df.shape[0]} rows, used: {end_time - start_time}s lastToSet: {lastToSet}')
 
 
 class DataSource:

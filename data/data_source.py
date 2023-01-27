@@ -562,8 +562,8 @@ class DataSource:
                 y.name = c
                 df_grouped.loc[y.index, c] = y
             else:
-                df_grouped.loc[y.index, c] = y.loc[y.index, c]
-                # df_grouped.update(y, join='left', overwrite=True)
+                # df_grouped.loc[y.index, c] = y.loc[y.index, c]
+                df_grouped.update(y, join='left', overwrite=True)
         if db_col is not None:
             if isinstance(db_col, str):
                 db_col = [db_col]

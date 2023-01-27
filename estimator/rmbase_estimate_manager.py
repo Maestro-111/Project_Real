@@ -171,8 +171,8 @@ class RmBaseEstimateManager:
         df = self.load_data(df_grouped=df_grouped,
                             scale=filterScale, date_span=-1)
         if df is None or (df.shape[0] == 0):
-            self.logger.warning(
-                f'No data found for scale {scale}.')
+            # self.logger.warning(
+            #     f'No data found for scale {scale}.')
             return None, None, None
         key = self.__model_key__()
         if key not in scale.meta:

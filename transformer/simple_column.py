@@ -154,8 +154,10 @@ def _transform_single(func, col, targetCol, X):
                 result = X.apply(
                     lambda x: func(x, x[col]), axis=1)
                 if isinstance(targetCol, list):
+                    logger.warning(
+                        f'targetCol is list: {col} => {targetCol}')
                     result = pd.DataFrame(list(result))
-                X.loc[:, targetCol] = result
+                X[targetCol] = result
             else:
                 logger.error(f'Column {col} not found')
         else:  # DataFrame to DataFrame

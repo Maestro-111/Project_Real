@@ -80,7 +80,7 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
         new_cols = self.get_feature_names_out()
         X[new_cols] = 0
         if 'bths' not in X.columns:
-            X['bths'] = [None for _ in range(X.shape[0])]
+            X['bths'] = None
             logger.warning('no bths column')
         else:
             for index, bths in X.loc[:, 'bths'].items():

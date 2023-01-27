@@ -139,7 +139,7 @@ class DatesTransformer(BaseEstimator, TransformerMixin):
 
         totalCount = X.shape[0]
         onDNanCount = X['onD'].isna().sum()
-        if self.offD:
+        if hasOffD:
             offDNanCount = X['offD'].isna().sum()
         else:
             offDNanCount = 0

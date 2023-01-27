@@ -111,7 +111,7 @@ def shallDrop(row):
         if (row['saletp-b'] == 1):
             if (row['lpr-n'] == 0) | (row['lpr'] is None) | (row['lpr'] > RENT_PRICE_UPPER_LIMIT):
                 return True
-        if (row['lst'] in ['Sld', 'Lsd']):
+        if ('lst' in row.index) and (row['lst'] in ['Sld', 'Lsd']):
             if (row['sp-n'] == 0) | (row['sp'] is None):
                 return True
     except Exception as e:

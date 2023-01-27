@@ -143,7 +143,7 @@ def _transform_single(func, col, targetCol, X):
     if hasattr(func, 'transform'):  # transformer
         if col:  # column to column
             if col in X.columns:
-                X.loc[:, targetCol] = func.transform(X[col])
+                X[targetCol] = func.transform(X[col])
             else:
                 logger.error(f'Column {col} not found')
         else:  # DataFrame to DataFrame

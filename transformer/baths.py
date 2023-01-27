@@ -80,17 +80,17 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
         new_cols = self.get_feature_names_out()
         X[new_cols] = 0
         if 'bths' not in X.columns:
-            X['bths'] = None
+            # X['bths'] = None
             logger.warning('no bths column')
         else:
-            for index, bths in X.loc[:, 'bths'].items():
-                totalCount += 1
+            def _transform(row):
+                bths = row['bths']
                 if not isinstance(bths, list):
                     if isnan(bths):
                         nanCount += 1
-                        continue
+                        return row
                     logger.warning(f'bths is not list: {bths}')
-                    continue
+                    return row
                 for bth in bths:
                     if not isinstance(bth, dict):
                         if isnan(bth):
@@ -100,8 +100,10 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
                     level = max(
                         0, min(round(getLevel(bth.get('l', 1)) + 0.01), BthsTransformer.maxLevel))
                     t = bth.get('t', 0)
-                    X.loc[index, f'bths-t{level}-n'] += t
-                    X.loc[index, f'bths-pc{level}-n'] += t * bth.get('p', 0)
+                    row[f'bths-t{level}-n'] += t
+                    row[f'bths-pc{level}-n'] += t * bth.get('p', 0)
+                return row
+            X = X.apply(_transform, axis=1)
         if nanCount > 0:
             logger.warning(f'{nanCount}/{totalCount} nan values in bths')
         timer.stop(X.shape[0])

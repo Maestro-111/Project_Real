@@ -70,16 +70,16 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
         X[new_cols] = 0
         if 'rms' not in X.columns:
             logger.warning('rms not in X.columns')
-            X['rms'] = [None for _ in range(len(X))]
+            # X['rms'] = None
         else:
-            for index, rms in X.loc[:, 'rms'].items():
-                totalCount += 1
+            def _transform(row):
+                rms = row['rms']
                 if not isinstance(rms, list):
                     if isnan(rms):
                         nanCount += 1
-                        continue
+                        return row
                     logger.warning(f'rms is not list: {rms}')
-                    continue
+                    return row
                 totalSize = 0
                 totalArea = 0
                 for rm in rms:
@@ -93,15 +93,17 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
                         w = rm.get('w', 0) or 0
                         h = rm.get('h', 0) or 0
                         if self.masterReg.match(t):
-                            X.loc[index, 'rms-p_size-n'] = w + h
-                            X.loc[index, 'rms-p_area-n'] = w * h
+                            row['rms-p_size-n'] = w + h
+                            row['rms-p_area-n'] = w * h
                             totalSize += w + h
                             totalArea += w * h
                         elif self.bedroomReg.match(t) and getLevel(rm.get('l', 1)) >= 1:
                             totalSize += w + h
                             totalArea += w * h
-                X.loc[index, 'rms-t_size-n'] = totalSize
-                X.loc[index, 'rms-t_area-n'] = totalArea
+                row['rms-t_size-n'] = totalSize
+                row['rms-t_area-n'] = totalArea
+                return row
+            X = X.apply(_transform, axis=1)
         if nanCount > 0:
             logger.warning(f'{nanCount}/{totalCount} nan values in rms')
         timer.stop(totalCount)

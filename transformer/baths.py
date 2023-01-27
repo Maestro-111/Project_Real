@@ -84,6 +84,8 @@ class BthsTransformer(BaseEstimator, TransformerMixin):
             logger.warning('no bths column')
         else:
             def _transform(row):
+                nonlocal nanCount, totalCount
+                totalCount += 1
                 bths = row['bths']
                 if not isinstance(bths, list):
                     if isnan(bths):

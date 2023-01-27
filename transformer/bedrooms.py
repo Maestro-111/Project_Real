@@ -73,6 +73,8 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
             # X['rms'] = None
         else:
             def _transform(row):
+                nonlocal nanCount, totalCount
+                totalCount += 1
                 rms = row['rms']
                 if not isinstance(rms, list):
                     if isnan(rms):

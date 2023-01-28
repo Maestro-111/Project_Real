@@ -53,21 +53,13 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         X,
     ):
         """ Filter data for LGBMRegressor """
-        # X = X.copy()
         origX = X
-        # rowsBefore = X.shape[0]
-        # colsBefore = X.shape[1]
         # remove columns with all NaN
-        X.dropna(axis='columns', how='all', inplace=True)
+        X = X.dropna(axis='columns', how='all')
         # remove columns with all zeros
         X = X.loc[:, (X != 0).any(axis=0)]
         # remove rows with NaN
         X = X.dropna()
-        # rowsAfter = len(X.index)
-        # colsAfter = X.shape[1]
-        # self.logger.info(
-        #     f'''*{self.name}* Rows dropped: {rowsBefore-rowsAfter}/{rowsBefore}=>{rowsAfter} \
-        #     Cols dropped: {colsBefore-colsAfter}/{colsBefore}=>{colsAfter}''')
         logDataframeChange(origX, X, self.logger, self.name)
         return X
 

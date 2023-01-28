@@ -192,9 +192,10 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
             # set category column
             if self.col_category is not None:
                 def _get_category(value):
-                    ret = []
                     if isinstance(value, list):
-                        return [self.map_.get(v, v) for v in value]
+                        ret = list(set([self.map_.get(v, v) for v in value]))
+                        ret.sort()
+                        return ret
                     elif isinstance(value, str):
                         return self.map_.get(value, value)
                     elif isNanOrNone(value):
@@ -204,7 +205,7 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
                             f'{self.col} {value} {type(value)} not in map for category {self.col_category}')
                         return None
                 Xs = X[self.col].apply(_get_category)
-                X.loc[:, self.col_category] = super().transform(Xs)
+                X[self.col_category] = super().transform(Xs)
         else:
             logger.error(f'{self.col} not in X')
 

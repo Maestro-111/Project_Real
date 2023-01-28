@@ -166,7 +166,7 @@ def update_records(
         savedCount += 1
     end_time = time.time()
     logger.info(
-        f'Saved {savedCount}/{df.shape[0]} rows, used: {end_time - start_time}s lastToSet: {lastToSet}')
+        f'Saved {savedCount}/{df.shape[0]} rows, used: {end_time - start_time}s lastToSet({lastId}):{lastToSet}')
 
 
 class DataSource:

@@ -183,6 +183,7 @@ def columnValues(df: pd.DataFrame, col: str) -> list:
 
 def getRoundFunction(n=1, min=0, max=1000000, outRangeValue=0):
     def roundByN(value):
+        nonlocal n, min, max, outRangeValue
         if isnan(value):
             return value
         retValue = int(round(value / n) * n)

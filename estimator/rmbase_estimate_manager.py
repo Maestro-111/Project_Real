@@ -193,7 +193,7 @@ class RmBaseEstimateManager:
         if self.model_class == MODEL_TYPE_REGRESSION:
             y = self.round_result(y)
         self.logger.info(
-            f'Estimation result: {y} MODEL CLASS {self.model_class}')
+            f'Estimation result for {self.name} {str(scale)} [{self.min_output_value_},{self.max_output_value_}]: {y}')
         y_target_col = self.get_output_column()
         df[y_target_col] = y
         df[y_target_col+'-acu'] = model_dict['accuracy']
@@ -371,8 +371,8 @@ class RmBaseEstimateManager:
     def round_result(self, y_pred: Union[pd.Series, pd.DataFrame, np.ndarray], col: str = None):
         fnRound = getRoundFunction(
             getattr(self, 'roundBy', 1),
-            min=self.min_output_value_ or self.min_output_value,
-            max=self.max_output_value_ or self.max_output_value,
+            min=self.min_output_value_,
+            max=self.max_output_value_,
         )
         if isinstance(y_pred, pd.Series):
             y_pred = y_pred.map(fnRound)
@@ -391,16 +391,10 @@ class RmBaseEstimateManager:
         stats = y.agg(['min', 'max', 'mean', 'std']).to_dict()
         min_output_value = min(
             stats['min'], stats['mean'] - 3 * stats['std'])
-        if self.min_output_value < min_output_value:
-            self.min_output_value_ = min_output_value
-        else:
-            self.min_output_value_ = self.min_output_value
+        self.min_output_value_ = max(min_output_value, self.min_output_value)
         max_output_value = max(
             stats['max'], stats['mean'] + 3 * stats['std'])
-        if self.max_output_value > max_output_value:
-            self.max_output_value_ = max_output_value
-        else:
-            self.max_output_value_ = self.max_output_value
+        self.max_output_value_ = min(max_output_value, self.max_output_value)
 
     def filter_data_outranged(self, df: pd.DataFrame, y_col: str) -> pd.DataFrame:
         """Filter data within hard min/max limit."""

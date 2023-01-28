@@ -144,6 +144,7 @@ def update_records(
     data_to_save = df.to_dict(orient='index')
     savedCount = 0
     lastToSet = {}
+    lastId = ''
     for key, value in data_to_save.items():
         id = key[id_index]
         # logger.debug(f'Updating key: {key} , id: {id}')
@@ -152,14 +153,15 @@ def update_records(
         for k, v in value.items():
             if isinstance(v, (int, float)) and not isnan(v) and v != 0:
                 toSet[k] = v
-        if len(toSet) == 0:
-            # logger.warning(f'Nothing to save for: {id}')
+        if len(toSet) < 2:
+            # for value and accuracy, we need to update at least 2 columns
             continue
         mongodb.updateOne(
             'properties',
             {'_id': id},
             {'$set': toSet}
         )
+        lastId = id
         lastToSet = toSet
         savedCount += 1
     end_time = time.time()

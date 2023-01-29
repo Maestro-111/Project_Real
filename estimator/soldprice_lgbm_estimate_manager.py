@@ -3,6 +3,15 @@ from estimator.lgbm_estimate_manager import LgbmEstimateManager
 import pandas as pd
 from math import isnan
 
+###
+# TODO: Soldprice shall also consider the following factors:
+#       - sold/asking price ratio for this type of property in the area
+#       - sold/asking price ratio change over time
+#       - value vs asking: a difference shall be calculated
+#       - days on market: how it affects the sold/asking price ratio
+###
+
+
 ESTIMATOR_NAME = 'SoldPrice'
 
 

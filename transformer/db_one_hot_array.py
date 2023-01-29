@@ -3,7 +3,7 @@ from math import isnan
 from base.base_cfg import BaseCfg
 
 from base.timer import Timer
-from base.util import isNanOrNone
+from base.util import flattenList, isNanOrNone
 from numpy import nan
 from sklearn.base import BaseEstimator, TransformerMixin
 from transformer.db_label import DbLabelTransformer
@@ -193,7 +193,7 @@ class DbOneHotArrayEncodingTransformer(DbLabelTransformer):
             if self.col_category is not None:
                 def _get_category(value):
                     if isinstance(value, list):
-                        ret = list(set([self.map_.get(v, v) for v in value]))
+                        ret = list(set(flattenList([self.map_.get(v, v) for v in value])))
                         ret.sort()
                         return ret
                     elif isinstance(value, str):

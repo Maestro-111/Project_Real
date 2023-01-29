@@ -3,6 +3,12 @@ from estimator.lgbm_estimate_manager import LgbmEstimateManager
 import pandas as pd
 from math import isnan
 
+###
+# TODO: Rent change over time should be a factor.
+#       Statistics from baseline transformer should be used to do an adjustment.
+###
+
+
 ESTIMATOR_NAME = 'Rent'
 
 

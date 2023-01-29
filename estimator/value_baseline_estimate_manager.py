@@ -6,6 +6,12 @@ import pandas as pd
 from math import isnan
 from sklearn.model_selection import train_test_split, RepeatedKFold, cross_val_score
 
+###
+# Calculate the value from the baseline statistics.
+#   1. Calculate the value from all the features.
+#   2. Use a model to calculate the value from the features values.
+###
+
 
 DISCRETE_FEATURE_COLUMNS = [
     'gr',

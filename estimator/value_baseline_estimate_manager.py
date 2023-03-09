@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split, RepeatedKFold, cross_val_s
 ###
 # Calculate the value from the baseline statistics.
 #   1. Calculate the value from all the features.
-#   2. Use a model to calculate the value from the features values.
+#   2. Use a model to calculate the value from the featured values.
 ###
 
 

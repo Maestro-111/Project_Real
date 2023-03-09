@@ -34,20 +34,25 @@ search_scale = EstimateScale(
             propType=None,  # PropertyType.DETACHED,
             prov='ON',
             area=None,
-            city='Mississauga',
+            city='Milton',
             sale=None,
         )
 
 org = Organizer(use_baseline=True)
-#org.load_data(search_scale)
-org.load_data()
+org.load_data(search_scale)
+#org.load_data()
 org.init_transformers()
 org.train_models()
 org.watch_n_predicting()
 
 
-df = org.data_source.df_grouped
-printColumns(df,'bltYr')
+df = org.data_source.df_raw
+#print(df[['bltYr-n','bltYr-bl-n','bltYr-blm-n']])
+printColumns(df)
+
+y = org.data_source.y
+idx = y.index
+dup = idx.duplicated()
 
 
 def printColumns(df, start: str = None):

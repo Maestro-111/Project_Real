@@ -289,7 +289,15 @@ class Organizer:
             # start watching
             sleepCount = 0
             while stream.alive:
-                change = stream.try_next()
+                try:
+                    change = stream.try_next()
+                except StopIteration:
+                    logger.warn('watching stopped')
+                    # TODO: skip this record and continue
+                    continue
+                except Exception as e:
+                    logger.error(e)
+                    continue
                 if change is not None:
                     # logger.info(f"change {change['operationType']}")
                     if change['operationType'] == 'insert':

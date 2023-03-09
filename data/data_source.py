@@ -112,7 +112,7 @@ def read_data_by_query(
     start_time = time.time()
     result = mongodb.load_data('properties', col_list, query)
     if BaseCfg.isDebug():
-        logger.debug('columns: {result.columns} shape: {result.shape}')
+        logger.debug(f'columns: {result.columns} shape: {result.shape}')
         print_dateframe(result)
     end_time = time.time()
     logger.info(

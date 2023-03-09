@@ -3,6 +3,7 @@ import pandas as pd
 import pymongo
 from pymongo import MongoClient
 from .base_cfg import BaseCfg
+from bson.codec_options import DatetimeConversion
 
 logger = BaseCfg.getLogger('mongo.py')
 
@@ -24,10 +25,14 @@ class MongoDB():
             mongo_uri = 'mongodb://%s:%s@%s:%s/%s?authSource=admin&authMechanism=SCRAM-SHA-1' % (
                 user, password, host, port, dbname)
             logger.info(mongo_uri)
-            self.conn = MongoClient(mongo_uri)
+            # to avoid error: bson.errors.InvalidBSON: year 20023 is out of range
+            self.conn = MongoClient(
+                mongo_uri, datetime_conversion=DatetimeConversion.DATETIME_AUTO)
         else:
             logger.debug('connect to DB')
-            self.conn = MongoClient(host, port)
+            # to avoid error: bson.errors.InvalidBSON: year 20023 is out of range
+            self.conn = MongoClient(
+                host, port, datetime_conversion=DatetimeConversion.DATETIME_AUTO)
         self.db = self.conn[dbname]
 
     def close(self):

@@ -7,8 +7,8 @@ from base.base_cfg import BaseCfg
 import pandas as pd
 from base.util import columnValues
 
-from regex import F, P
-from sympy import Q
+# from regex import F, P
+# from sympy import Q
 logger = BaseCfg.getLogger(__name__)
 
 

@@ -1,6 +1,7 @@
 import os
 os.environ['DEBUG'] = 'True'
-os.environ["RMBASE_FILE_PYTHON"] = "/Users/fred/work/cfglocal/built/base.py"
+os.environ["RMBASE_FILE_PYTHON"] = "C:/pyml/cfg.py"
+
 print(os.environ['RMBASE_FILE_PYTHON'])
 
 import datetime
@@ -43,11 +44,15 @@ org.load_data(search_scale)
 #org.load_data()
 org.init_transformers()
 org.train_models()
+print("!")
 org.watch_n_predicting()
+print("!") # replica shit
 
 
-df = org.data_source.df_raw
+#df = org.data_source.df_raw
 #print(df[['bltYr-n','bltYr-bl-n','bltYr-blm-n']])
+
+"""
 printColumns(df)
 
 y = org.data_source.y
@@ -417,13 +422,6 @@ def calc_stats(
     feature_continuous: list[str] = None,
     col: str = 'lp-n'
 ):
-    """Calculate statistics for a sorted dataframe.
-
-    Parameters
-    ==========
-    df: pd.DataFrame. Indexed by Prov, Area, City, Type as in data_source.py
-        ( 'saletp-b', 'ptype2-l','prov', 'area', 'city','_id')
-    """
     stats = {}
     overall = df[col].describe()
     stats['overall'] = overall.to_dict()
@@ -443,3 +441,4 @@ df2.groupby(['gr-n'])['lp-n'].describe()
 a = ['ab','cde','fg'].
 print(isinstance(None, (int,float)))
 print(isnan(a))
+    """

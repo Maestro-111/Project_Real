@@ -45,7 +45,7 @@ org.load_data(search_scale)
 org.init_transformers()
 org.train_models()
 print("!")
-org.watch_n_predicting()
+#org.watch_n_predicting()
 print("!") # replica shit
 
 

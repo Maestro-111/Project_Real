@@ -81,6 +81,9 @@ class MongoDB():
         projection = {col: 1 for col in col_list}
         cursor = self.collection(collection).find(filter, projection)
         df = pd.DataFrame(list(cursor)).infer_objects()
+        print("This is the first debug!!!!!!!!!!!!!!!!!!!!!!!1\n")
+        print(df.head(n=3))
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
         return df
 
     def appendMt(self, update):

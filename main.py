@@ -35,7 +35,7 @@ search_scale = EstimateScale(
             propType=None,  # PropertyType.DETACHED,
             prov='ON',
             area=None,
-            city='Milton',
+            city='Oakville',
             sale=None,
         )
 
@@ -44,15 +44,14 @@ org.load_data(search_scale)
 #org.load_data()
 org.init_transformers()
 org.train_models()
-print("!")
-#org.watch_n_predicting()
-print("!") # replica shit
+org.watch_n_predicting()
 
 
-#df = org.data_source.df_raw
-#print(df[['bltYr-n','bltYr-bl-n','bltYr-blm-n']])
 
-"""
+df = org.data_source.df_grouped
+print(df[['bltYr-n','bltYr-bl-n','bltYr-blm-n']])
+
+print(df)
 printColumns(df)
 
 y = org.data_source.y

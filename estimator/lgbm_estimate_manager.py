@@ -113,7 +113,15 @@ class LgbmEstimateManager(RmBaseEstimateManager):
 
     def feature_importance(self, model) -> list:
         featureZip = list(zip(model.feature_importances_, model.feature_name_))
+        #print("?????????")
+        #print(model.feature_importances_)
+        #print("?????????")
+        #print(model.feature_name_)
+        #print("?????????")
         featureZip.sort(key=lambda v: v[0], reverse=True)
+        #print("!!!!!!!!!")
+        #print(featureZip)
+        #print("!!!!!!!!!,degub2")
         return featureZip
 
     def my_load_data(self, scale: EstimateScale = None) -> pd.DataFrame:

@@ -11,6 +11,7 @@ from base.const import DROP, Mode
 from data.estimate_scale import EstimateScale
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 from typing import Union
 from scipy import stats
@@ -166,7 +167,8 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         # we may need to use a wrapper here
         # X = pd.DataFrame(X)
         # logger.debug(f'number {self.col} transform')
-        if isinstance(self.na_value, str):
+        
+        if isinstance(self.na_value, str): # probably add normalization?
             if self.na_value == DROP:
                 na_value = np.nan
             else:
@@ -175,6 +177,23 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
             na_value = self.na_value
         else:
             na_value = self.stats_["mean"]
+            
+        scaler = MinMaxScaler()
+        
         X.fillna(na_value, inplace=True)
+        
+        X = [[i] for i in X]
+
+        t = scaler.fit_transform(X)
+        
+        unpacked = [[*t[i]][0] for i in range(len((t)))]
+        
+        #print(unpacked)
+        
+        X = pd.Series(unpacked)
+
+        #print("Myrad"*100)
+        #print(X.head(n = 3))
+        #print("Myrad"*100)
         return X
         # return pd.DataFrame({self.col: X.values})

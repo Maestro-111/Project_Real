@@ -124,8 +124,14 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
                     logger.error(ex)
                     raise ex
         df_results = pd.concat(df_results)
-        # print('after merge========================')
-        # print(df_results)
+        print('after merge========================\n')
+        print()
+        print()
+        print()
+        print()
+        print()
+        print(df_results)
+        print("?")
         timer.stop(len(X.index))
         return df_results
 

@@ -443,7 +443,7 @@ class DataSource:
         else:
             slices.append(slice(None))
         slices.append(slice(None))
-        if df_grouped is None:
+        if df_grouped is None: # yes, its None and we use df.grouped (final data frame)
             df_grouped = self.df_grouped
         rd = df_grouped.loc[tuple(slices), :]
         logger.debug(f'{slices} {len(df_grouped.index)}=>{len(rd.index)}')

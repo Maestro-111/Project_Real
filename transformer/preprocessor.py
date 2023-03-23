@@ -326,7 +326,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         # return flatten(cols)
         return flattenList(cols)
 
-    def build_transformers(self, all_cols):
+    def build_transformers(self, all_cols): # data cleansing part
         """Build the transformers.
            The transformers need to work with less columns when the predictions has less data.
 
@@ -464,7 +464,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
 
         return self.customTransformers
 
-    def fit(self, Xdf: pd.DataFrame, y=None):
+    def fit(self, Xdf: pd.DataFrame, y=None): # Xdf is raw data from the database
         """A reference implementation of a fitting function for a transformer.
         Parameters
         ----------
@@ -525,4 +525,24 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                 self.Xdf = Xdf  # for debug
             self.fited_all_ = True
         #pd.set_option('mode.chained_assignment', 'warn')
+        #print("MYRAD"*100)
+        #print(Xdf.head(n=3))
+        #print("MYRAD"*100)
+        #print(Xdf["addr"].head(n=3))
+        #print()
+        #print(Xdf["feat"].head(n=3))
+        #print("MYRAD"*100)
+        
+        threshold = 0.75
+        na_percentages = Xdf.isna().sum() / Xdf.shape[0]
+        cols_to_drop = na_percentages[na_percentages > threshold].index
+        Xdf = Xdf.drop(cols_to_drop, axis=1)
+        
+        # replace na with mean if numeric or mode in object
+        # encode remaining categorical/text
+        # try different normaliztion techniques
+
+        nested_cols = Xdf.applymap(type).isin([dict, list]).any()
+        Xdf = Xdf.loc[:, ~nested_cols]
+        
         return Xdf

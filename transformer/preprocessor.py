@@ -179,7 +179,7 @@ class OutlierRemover(BaseEstimator,TransformerMixin): # our own class to remove 
         iqr = q3 - q1
         self.lower_bound.append(q1 - (self.factor * iqr)) 
         self.upper_bound.append(q3 + (self.factor * iqr))
-        self.median.append(X.median())
+        self.median.append(X.median()) # try to change
 
     def fit(self,X,y=None): # for each coulmn we will append corresponding boundary and the median value
         self.median = []
@@ -204,14 +204,14 @@ class Custom_Cat_Imputer(BaseEstimator, TransformerMixin):
     def transform(self,X,y=None):
         X = pd.DataFrame(X).copy()
         for col in X.columns:
-            X[col] = X[col].interpolate(method='pad', limit_direction = "forward")
-            X[col] = X[col].interpolate(method='bfill', limit_direction = "backward")
+            X[col] = X[col].interpolate(method='pad', limit_direction = "forward") # fffil
+            X[col] = X[col].interpolate(method='bfill', limit_direction = "backward") # bffil
         return X # our transformed df
 
 
 class OneHotEncoderWithNames(BaseEstimator, TransformerMixin):
     def __init__(self):
-        self.imputer = Custom_Cat_Imputer()
+        self.imputer = Custom_Cat_Imputer() # mode
         self.one_hot_encoder = OneHotEncoder()
         self.column_names = None
         
@@ -321,6 +321,8 @@ class Dates_common_Pipeline(BaseEstimator,TransformerMixin): # convert the thing
             X[col] = X[col].interpolate(method='bfill', limit_direction = "backward")    
         X[X.columns.tolist()] = (X[X.columns.tolist()] - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s')
         return X 
+    
+
   
 class Dates_numeric_Pipeline(BaseEstimator,TransformerMixin):
     def fit(self,X,y=None): 
@@ -778,7 +780,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         z = z.reindex(sorted(z.columns), axis=1)
         Xdf = z
         Xdf.head(n=100).to_excel("preporcesed_data.xlsx")
-        self.encoded_hot = num_cols+list(one_hot_names)
+        self.encoded_hot = [] #num_cols+list(one_hot_names)
         self.Xdf = Xdf
         #print(Xdf.info())
         return Xdf

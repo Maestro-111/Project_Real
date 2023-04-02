@@ -480,6 +480,7 @@ class DataSource:
         if filter_func is not None:
             bol = rd.apply(filter_func, axis=1, result_type='reduce')
             rd = rd.loc[bol]
+        
         logger.debug(f'after filter_func {len(rd.index)}')
   
         if len(rd.index) == 0:

@@ -318,9 +318,8 @@ class Dates_common_Pipeline(BaseEstimator,TransformerMixin): # convert the thing
         X = pd.DataFrame(X).copy()
         for col in X.columns:
             X[col] = X[col].interpolate(method='pad', limit_direction = "forward")#X[col].interpolate(method='linear')
-            X[col] = X[col].interpolate(method='bfill', limit_direction = "backward")
-            
-        #X[X.columns] = X[X.columns].astype(object)
+            X[col] = X[col].interpolate(method='bfill', limit_direction = "backward")    
+        X[X.columns.tolist()] = (X[X.columns.tolist()] - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s')
         return X 
   
 class Dates_numeric_Pipeline(BaseEstimator,TransformerMixin):
@@ -329,7 +328,7 @@ class Dates_numeric_Pipeline(BaseEstimator,TransformerMixin):
     def transform(self,X,y=None):
         X = pd.DataFrame(X).copy()
         for col in X.columns:
-            X[col] = X[col].interpolate(method='linear')
+            X[col] = X[col].interpolate(method='linear').round(0)
             X[col] = X[col].interpolate(method='bfill', limit_direction = "backward")
         return X 
     
@@ -702,7 +701,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
  
         ###### Prepocessing part (some of it)
         
-        threshold = 0.6
+        threshold = 0.75
         
         na_percentages = Xdf.isna().sum() / Xdf.shape[0]
         cols_to_drop = list(na_percentages[na_percentages > threshold].index)
@@ -726,9 +725,9 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         dates_special = list(set(existing).intersection(set(dates_special)))
         num_cols = [col for col in Xdf.columns if (Xdf.dtypes[col] in ["int64","int32","float64","float32"] and col not in dates_special)]  
         ob = [col for col in Xdf.columns if col not in num_cols and col not in dates_special and Xdf.dtypes[col] != "datetime64[ns]"]  
-        #common_dates = [col for col in Xdf.columns if col not in num_cols and col not in ob and col not in dates_special]
-        dates_special = dates_special + [col for col in Xdf.columns if col not in num_cols and col not in ob and col not in dates_special]
         
+        common_dates = [col for col in Xdf.columns if col not in num_cols and col not in ob and col not in dates_special]
+        #dates_special = dates_special + [col for col in Xdf.columns if col not in num_cols and col not in ob and col not in dates_special]
         
         encoders = []
         others = []
@@ -748,30 +747,31 @@ class Preprocessor(TransformerMixin, BaseEstimator):
             else:
                 others.append(col)
         
-
-
         numeric = Pipeline([ 
         ('imputer', custom_numeric_imputer()),
         ("outliers_removal", OutlierRemover())]) # based on the correlation
         
-        dates_pipe_spec = Pipeline([('rest', Dates_common_Pipeline())]) # interpolate na
-        #dates_pipe_common = Pipeline([('rest', Dates_common_Pipeline())])
+        dates_pipe_spec = Pipeline([('numeric_dates', Dates_numeric_Pipeline())]) # interpolate na
+        dates_pipe_common = Pipeline([('rest_dates', Dates_common_Pipeline())])
         
         str_pipe_encoders = Pipeline([("one_hot_imputer", OneHotEncoderWithNames())])
-        str_pipe_others = Pipeline([('imputer', SimpleImputer(strategy="most_frequent"))]) # try other techniques
+        str_pipe_others = Pipeline([('imputer', SimpleImputer(strategy="most_frequent"))]) 
         
-        full_pipeline = ColumnTransformer([("num", numeric, num_cols), ("dates_special",dates_pipe_spec,dates_special), ("str_encode",str_pipe_encoders,encoders),("str_others",str_pipe_others,others)])
+        full_pipeline = ColumnTransformer([("num", numeric, num_cols), ("numeric_dates",dates_pipe_spec,dates_special),("common_dates",dates_pipe_common,common_dates) ,("str_encode",str_pipe_encoders,encoders),("str_others",str_pipe_others,others)])
 
         g = full_pipeline.fit_transform(Xdf)
-        columns = num_cols + dates_special+ list(one_hot_names) + others
+        columns = num_cols + dates_special+ common_dates +list(one_hot_names) + others
+        
         
         z = pd.DataFrame(g,columns=columns)
         
-        dates_to_change = []
+        z[common_dates] = z[common_dates].apply(lambda x : pd.to_datetime(x , unit='s'), axis = 1)
         
-        for c in dates_special:
-            if Xdf[dates_special].dtypes[c] != "datetime64[ns]":
-                dates_to_change.append(c)
+        dates_to_change = dates_special
+        
+        #for c in dates_special:
+            #if Xdf[dates_special].dtypes[c] != "datetime64[ns]":
+                #dates_to_change.append(c)
                 
         all_cols = num_cols+dates_to_change+list(one_hot_names)
         z[all_cols] = z[all_cols].apply(pd.to_numeric)
@@ -780,6 +780,7 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         Xdf.head(n=100).to_excel("preporcesed_data.xlsx")
         self.encoded_hot = num_cols+list(one_hot_names)
         self.Xdf = Xdf
+        #print(Xdf.info())
         return Xdf
     
     

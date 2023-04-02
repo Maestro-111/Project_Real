@@ -51,6 +51,7 @@ class RmBaseEstimateManager:
         max_output_value: float = 1000000000,
     ) -> None:
         self.data_source = data_source
+        self.additional_x_cols = data_source.encoded_hot # additional labels for the initial class
         self.name = name
         self.model_class = model_class
         self.logger = BaseCfg.getLogger(name or self.__class__.__name__)
@@ -300,12 +301,17 @@ class RmBaseEstimateManager:
         """
         if self.data_source is None:
             raise ValueError('Data source is not specified.')
+            
+            
         col_list = []
+        additional_columns = []
+        
         if x_columns is not None:
             col_list.extend(x_columns)
         elif hasattr(self, 'x_columns'):
             # self.logger.debug(f'x_columns: {self.x_columns}')
             col_list.extend(self.x_columns)
+            
         if len(col_list) == 0:
             # when no x_columns are specified, load all columns
             col_list = None
@@ -313,6 +319,16 @@ class RmBaseEstimateManager:
             col_list.append(y_column)
         elif hasattr(self, 'y_column'):
             col_list.append(self.y_column)
+            
+        
+        if hasattr(self, "additional_x_cols"): # additional str columns
+            additional_columns.extend(self.additional_x_cols)
+        
+        #print(col_list)
+        #exit()      
+        # add more cols here
+
+            
         numeric_columns_only = numeric_columns_only or getattr(
             self, 'numeric_columns_only', False)
         # do not save df to self.df, as subclases may need to load different data sets multiple times
@@ -325,6 +341,7 @@ class RmBaseEstimateManager:
             numeric_columns_only=numeric_columns_only,
             prefer_estimated=prefer_estimated,
             df_grouped=df_grouped,
+            ad_cols = additional_columns
         )
         # self.logger.info(f'Data loaded. {suffix_list or self.suffix_list}')
         return df

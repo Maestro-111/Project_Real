@@ -154,7 +154,7 @@ class Organizer:
             ValueLgbmEstimateManager,
             SoldPriceLgbmEstimateManager,
         ]:
-            em = estimate_manager(self.data_source)
+            em = estimate_manager(self.data_source) # add cols
             em.load_scales()
             em.train()
             if em.name not in self.estimate_managers:

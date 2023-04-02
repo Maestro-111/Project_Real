@@ -7,7 +7,8 @@ import lightgbm as lgb
 import pandas as pd
 from math import isnan
 from sklearn.model_selection import train_test_split, RepeatedKFold, cross_val_score
-
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 
 class LgbmEstimateManager(RmBaseEstimateManager):
     """LightGBM manager."""
@@ -64,6 +65,7 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         return X
 
     def train_single_scale(self, scale: EstimateScale) -> tuple[EstimateScale, object, float, list[str], dict]:
+        # PCA should be added here
         timer = Timer(str(scale), self.logger)
         timer.start()
         df = self.my_load_data(scale)
@@ -75,9 +77,27 @@ class LgbmEstimateManager(RmBaseEstimateManager):
             self.logger.info(
                 '------------------------------------------------')
             return (None, None, None, None, None, None)
+        
+        
         model = self.prepare_model()
         x_cols, y_col, x_means = self.get_x_y_columns(df)
-        df = self.filter_data_outranged(df, y_col=y_col)
+        df = self.filter_data_outranged(df, y_col=y_col) 
+        
+        
+        y = StandardScaler()
+        
+        spare = pd.DataFrame(y.fit_transform(df[x_cols]), columns = x_cols)
+        df = pd.concat([spare, pd.Series(df[y_col].tolist())], axis = 1)
+        df = df.rename(columns={0: y_col})
+        
+        
+        if y_col == "sp-n":
+            col_names = pd.DataFrame(df.columns)
+            col_names.to_excel("names.xlsx")
+            
+        df.to_excel("final_data3.xlsx")
+        
+        
         if df.shape[0] < TRAINING_MIN_ROWS:
             self.logger.info(
                 '================================================')
@@ -86,13 +106,50 @@ class LgbmEstimateManager(RmBaseEstimateManager):
             self.logger.info(
                 '------------------------------------------------')
             return (None, None, None, None, None, None)
+        
+        """
+        pca = PCA(n_components=0.95) # preserve 95% of explained variance
+        tt = df.iloc[:, 0:df.shape[1]-1]
+        pd.DataFrame(tt.shape[0] - tt.count()).to_excel("null.xlsx")
+        red_95 = pca.fit_transform(df.iloc[:, 0:df.shape[1]-1])
+        df = pd.concat([pd.DataFrame(red_95),pd.DataFrame(df.iloc[:, df.shape[1]-1])], axis=1) 
+        X_train, X_test, y_train, y_test = train_test_split(df.iloc[:, 0:df.shape[1]-1],df.iloc[:, df.shape[1]-1], test_size=0.15, random_state=10)
+        model.fit(X_train, y_train)
+        self.fit_output_min_max(df.iloc[:, df.shape[1]-1])
+        accuracy = self.test_accuracy(model, X_test, y_test)
+        #timer.stop(X_train.shape[0])
+        """
+
         df_train, df_test = train_test_split(
             df, test_size=0.15, random_state=10)
+        
+        # cross
+        if y_col == "sp-n":
+            scores = cross_val_score(model, df_train[x_cols], df_train[y_col], cv=10).mean()
+            score_data = pd.DataFrame({f'Mean Validation Accuracy for {y_col}': [scores]})
+            table = pd.read_excel('Cross_Val_Eval_1.xlsx') 
+            table = pd.concat([table,score_data], axis = 0)
+            with pd.ExcelWriter('Cross_Val_Eval_1.xlsx') as writer:
+                table.to_excel(writer, index=False)
+
+            
+        
         model.fit(df_train[x_cols], df_train[y_col])
         self.fit_output_min_max(df[y_col])
         accuracy = self.test_accuracy(
             model, df_test[x_cols], df_test[y_col])
-        timer.stop(df_train.shape[0])
+        
+
+        accuracy_table = pd.read_excel('accuracy_no_changes.xlsx') #accuracy_no_changes #accuracy_with_changes
+        new_data = pd.DataFrame({f'Accuracy for {y_col}:': [accuracy/100]})
+        
+        accuracy_table = pd.concat([accuracy_table,new_data], axis = 0)
+
+        with pd.ExcelWriter('accuracy_no_changes.xlsx') as writer:
+            accuracy_table.to_excel(writer, index=False)
+
+        timer.stop(df_train.shape[0]) #timer.stop(df_train.shape[0])
+        
         self.logger.info('================================================')
         self.logger.info(
             f'{str(scale)} {str(self.model_name)} model trained accuracy:{accuracy/100.0}%')
@@ -113,15 +170,7 @@ class LgbmEstimateManager(RmBaseEstimateManager):
 
     def feature_importance(self, model) -> list:
         featureZip = list(zip(model.feature_importances_, model.feature_name_))
-        #print("?????????")
-        #print(model.feature_importances_)
-        #print("?????????")
-        #print(model.feature_name_)
-        #print("?????????")
         featureZip.sort(key=lambda v: v[0], reverse=True)
-        #print("!!!!!!!!!")
-        #print(featureZip)
-        #print("!!!!!!!!!,degub2")
         return featureZip
 
     def my_load_data(self, scale: EstimateScale = None) -> pd.DataFrame:

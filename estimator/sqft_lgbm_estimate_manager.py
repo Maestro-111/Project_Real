@@ -28,14 +28,16 @@ class SqftLgbmEstimateManager(LgbmEstimateManager, WritebackMixin):
         'ptp', 'pstyl', 'constr', 'feat',
         'bsmt',  'heat', 'park_fac',
         'st', 'st_num',
-    ]
+    ] # add more columns here
+    
+    #additional_x_cols = ['all_inc_N', 'all_inc_Y', 'cac_inc_N', 'cac_inc_Y', 'comel_inc_N', 'comel_inc_Y', 'daddr_N', 'daddr_Y', 'den_fr_N', 'den_fr_Y', 'heat_inc_N', 'heat_inc_Y', 'hydro_inc_N', 'hydro_inc_Y', 'insur_bldg_N', 'insur_bldg_Y', 'prkg_inc_N', 'prkg_inc_Y', 'pvt_ent_N', 'pvt_ent_Y', 'status_A', 'status_U', 'water_inc_N', 'water_inc_Y']
 
     def __init__(self, data_source):
         super().__init__(
             data_source,
             name=ESTIMATOR_NAME,
             model_params=None,
-            min_output_value=150,
+            min_output_value=150, #
             max_output_value=100000,
         )
 

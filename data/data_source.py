@@ -379,6 +379,7 @@ class DataSource:
         if self.df_raw is None:
             self.load_raw_data()
         self.df_transformed = preprocessor.fit_transform(self.df_raw)
+        self.encoded_hot = preprocessor.encoded_hot
         # groupby and reindex by EstimateScale
         self.df_grouped = self.df_transformed.set_index([
             'saletp-b', 'ptype2-l',
@@ -408,6 +409,7 @@ class DataSource:
         numeric_columns_only: bool = False,
         prefer_estimated: bool = False,
         df_grouped: pd.DataFrame = None,
+        ad_cols: list[str] = None
     ):
         """Get dataframe from stored data.
         """
@@ -445,30 +447,53 @@ class DataSource:
         slices.append(slice(None))
         if df_grouped is None: # yes, its None and we use df.grouped (final data frame)
             df_grouped = self.df_grouped
+            
         rd = df_grouped.loc[tuple(slices), :]
+                
         logger.debug(f'{slices} {len(df_grouped.index)}=>{len(rd.index)}')
+        
         if len(rd.index) == 0:
             return None
+        
         # onD:
-        if date_span > 0:
+            
+        #rd.to_excel("what's_popin00.xlsx")
+        
+        
+        if date_span > 0: # problem is here
             rd = rd.loc[rd.onD.between(
                 dateToInt(scale.datePoint - timedelta(days=date_span)),
                 dateToInt(scale.datePoint)
             )]
+        
         logger.debug(
             f'{scale.datePoint-timedelta(days=date_span)}-{scale.datePoint} {len(rd.index)}')
+        
+        
+        if rd.shape[0] == 0:
+            print("FUCKCKCKCKCK")
+            exit()
+        
+        #rd.to_excel("what's_popin0.xlsx")
+        
         # filter data by filter_func
         if filter_func is not None:
-            rd = rd.loc[rd.apply(filter_func, axis=1, result_type='reduce')]
+            bol = rd.apply(filter_func, axis=1, result_type='reduce')
+            rd = rd.loc[bol]
         logger.debug(f'after filter_func {len(rd.index)}')
+  
         if len(rd.index) == 0:
             logger.debug('index is empty')
             return None
         # sample data
         if sample_size is not None and sample_size < rd.shape[0]:
             rd = rd.sample(n=sample_size, random_state=1)
+            
+        rd.to_excel("what's_popin1.xlsx")
+        
         # select columns from cols
         existing_cols = rd.columns.tolist()
+        
         if cols is not None:
             columns = []
             for col in cols:
@@ -489,13 +514,28 @@ class DataSource:
             columns = list(dict.fromkeys(columns))  # remove duplicates
         else:
             columns = existing_cols
+            
+        
+        if ad_cols:        
+            one = set(columns)
+            two = set(cols)
+            three = set(existing_cols)
+            u = one.union(two)
+            dif = list(three.difference(u))
+            
+            
+            columns = columns + dif # subject to change!
+        
         rd = rd.loc[:, columns]
+        #rd.to_excel("what's_popin333.xlsx")
+        
         # if numeric_columns_only is True, only keep numeric columns
         if numeric_columns_only:
             numeric_columns = self.get_numeric_columns(
                 df=rd, prefer_estimated=prefer_estimated)
             rd = rd.loc[:, numeric_columns]
         # return dataframe or copy
+        #rd.to_excel("what's_popin2.xlsx")
         return rd.copy() if copy else rd
 
     def get_numeric_columns(
@@ -519,6 +559,7 @@ class DataSource:
             exclude_columns = []
         numeric_columns = []
         for col in df.columns:
+            print(col, df[col].dtype)
             try:
                 if (col not in exclude_columns) and \
                     (df[col].dtype == 'float64' or
@@ -527,7 +568,9 @@ class DataSource:
             except Exception as e:
                 self.logger.error(
                     f'Error in getting numeric column:{col} error:{e}')
+        print(numeric_columns)
         if prefer_estimated:
+            exit()
             new_cols = numeric_columns.copy()
             for col in numeric_columns:
                 if col.endswith('-e'):

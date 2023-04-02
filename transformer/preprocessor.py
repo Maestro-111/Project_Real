@@ -2,7 +2,7 @@
 import datetime
 from gc import garbage
 from itertools import chain
-
+import numpy as np
 import pandas as pd
 import re
 from math import isnan
@@ -34,8 +34,16 @@ from transformer.const_label_map import getLevel, levelType, acType, \
     heatType, fuelType, exposureType, laundryType, \
     parkingDesignationType, parkingFacilityType, balconyType, \
     ptpType
+    
+    
 from transformer.simple_column import SimpleColumnTransformer
 from transformer.street_n_st_num import StNumStTransformer
+
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.linear_model import LinearRegression
 
 logger = BaseCfg.getLogger(__name__)
 
@@ -159,6 +167,173 @@ SUFFIXES = {
     '-l': 'String Label',
 }
 
+
+class OutlierRemover(BaseEstimator,TransformerMixin): # our own class to remove outliers - we will insert it to the pipeline 
+    def __init__(self,factor=1.5):
+        self.factor = factor # higher the factor, extreme would be the outliers removed.
+        
+    def outlier_detector(self,X,y=None):
+        X = pd.Series(X).copy()
+        q1 = X.quantile(0.25)
+        q3 = X.quantile(0.75)
+        iqr = q3 - q1
+        self.lower_bound.append(q1 - (self.factor * iqr)) 
+        self.upper_bound.append(q3 + (self.factor * iqr))
+        self.median.append(X.median())
+
+    def fit(self,X,y=None): # for each coulmn we will append corresponding boundary and the median value
+        self.median = []
+        self.lower_bound = []
+        self.upper_bound = []
+        X.apply(self.outlier_detector)
+        return self
+    
+    def transform(self,X,y=None): # then, with transform we will check is a value goes beyond the boundary, if so we replace it
+        X = pd.DataFrame(X).copy()
+        for i in range(X.shape[1]):
+            x = X.iloc[:, i].copy() # change the copy
+            x[(x < self.lower_bound[i]) | (x > self.upper_bound[i])] = self.median[i] # replace outliers with the median
+            X.iloc[:, i] = x # make the column copy
+
+        return X # our transformed df
+    
+    
+class Custom_Cat_Imputer(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        return self
+    def transform(self,X,y=None):
+        X = pd.DataFrame(X).copy()
+        for col in X.columns:
+            X[col] = X[col].interpolate(method='pad', limit_direction = "forward")
+            X[col] = X[col].interpolate(method='bfill', limit_direction = "backward")
+        return X # our transformed df
+
+
+class OneHotEncoderWithNames(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        self.imputer = Custom_Cat_Imputer()
+        self.one_hot_encoder = OneHotEncoder()
+        self.column_names = None
+        
+    def get_rep_value(self, X):
+        mode = X.mode().tolist()[0]        
+        X = X.apply(lambda x : mode if OneHotEncoderWithNames.to_n(x) == "!" else x)
+        return X
+        
+    @staticmethod
+    def to_n(x):
+        try:
+            int(x)
+            return "!"
+        except ValueError:
+            return x
+    
+    def fit(self, X, y=None):
+        return self
+    
+    def transform(self, X, y=None):
+        print(".")
+        global one_hot_names
+        X_imputed = pd.DataFrame(self.imputer.fit_transform(X),columns = X.columns)
+        X_imputed = X_imputed.apply(self.get_rep_value)
+        X_one_hot_encoded = self.one_hot_encoder.fit_transform(X_imputed)
+        self.column_names = self.one_hot_encoder.get_feature_names(X_imputed.columns)
+        X_df = pd.DataFrame(X_one_hot_encoded.toarray(), columns=self.column_names)
+        one_hot_names = self.column_names
+        return X_df
+
+
+class custom_imputer(BaseEstimator, TransformerMixin):
+    def fit(self,X,y=None):
+        self.corr_matrix = X.corr()
+        return self
+    def transform(self,X,y=None):
+        X = pd.DataFrame(X).copy()
+        for column in X.columns:
+            col = list(self.corr_matrix[column])
+            vals = []
+            for i,correlation in enumerate(col):
+                vals.append((i,correlation)) 
+            vals = sorted(vals,key = lambda y : y[1], reverse = True)
+            for t in vals:
+                if t[0] == i:
+                    continue
+                else:
+                    val = t[0]
+                    break
+            med = X.iloc[:, val].median()
+            X[column].fillna(med, inplace=True)
+        return X     
+        
+class custom_numeric_imputer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        self.models = [] 
+        self.tests = {}
+    def fit(self,X,y=None):
+        features = set(X.columns.tolist())
+        m = X.isna()
+        select = []
+        for col in list(features):
+            if sum(m[col]) == 0:
+                select.append(col)
+                
+        features = set(select)
+        to_change = list(set(X.columns.tolist()).difference(features))
+        
+        for col in to_change:
+            ser = X[col]
+            ser = ser.reset_index(drop=True)
+            test = list(ser[ser.isnull()].index)
+            train = list(ser[ser.notnull()].index)
+            X_train = X[list(features)].iloc[train, :]
+            y_train = X[[col]].iloc[train, :]
+            model = LinearRegression()
+            model.fit(X_train,y_train)
+            self.tests[col] = [model,test]
+        else:
+            self.features = list(features)
+        return self
+            
+    def transform(self,X,y=None):
+        X = pd.DataFrame(X).copy().reset_index(drop=True)
+        for col in X.columns:
+            data = self.tests.get(col,False)
+            if not data:
+                continue
+            model,test_inds = data
+            no_nulls = []
+            preds = model.predict(X[self.features].iloc[test_inds, :])
+            for cube in preds:
+                no_nulls.append(cube[0])
+            x = X.loc[:, col].copy() 
+            x[test_inds] = no_nulls
+            X.loc[:, col] = x
+        return X    
+    
+
+class Dates_common_Pipeline(BaseEstimator,TransformerMixin): # convert the thing to the object format!
+    def fit(self,X,y=None): 
+        return self
+    def transform(self,X,y=None):
+        X = pd.DataFrame(X).copy()
+        for col in X.columns:
+            X[col] = X[col].interpolate(method='pad', limit_direction = "forward")#X[col].interpolate(method='linear')
+            X[col] = X[col].interpolate(method='bfill', limit_direction = "backward")
+            
+        #X[X.columns] = X[X.columns].astype(object)
+        return X 
+  
+class Dates_numeric_Pipeline(BaseEstimator,TransformerMixin):
+    def fit(self,X,y=None): 
+        return self
+    def transform(self,X,y=None):
+        X = pd.DataFrame(X).copy()
+        for col in X.columns:
+            X[col] = X[col].interpolate(method='linear')
+            X[col] = X[col].interpolate(method='bfill', limit_direction = "backward")
+        return X 
+    
+    
 
 class Preprocessor(TransformerMixin, BaseEstimator):
     """ Transforms raw training and prediction data
@@ -524,25 +699,91 @@ class Preprocessor(TransformerMixin, BaseEstimator):
                 logger.debug(Xdf.head())
                 self.Xdf = Xdf  # for debug
             self.fited_all_ = True
-        #pd.set_option('mode.chained_assignment', 'warn')
-        #print("MYRAD"*100)
-        #print(Xdf.head(n=3))
-        #print("MYRAD"*100)
-        #print(Xdf["addr"].head(n=3))
-        #print()
-        #print(Xdf["feat"].head(n=3))
-        #print("MYRAD"*100)
+ 
+        ###### Prepocessing part (some of it)
         
-        threshold = 0.75
+        threshold = 0.6
+        
         na_percentages = Xdf.isna().sum() / Xdf.shape[0]
-        cols_to_drop = na_percentages[na_percentages > threshold].index
+        cols_to_drop = list(na_percentages[na_percentages > threshold].index)
+        
+        if "bltYr-n" in cols_to_drop:
+            cols_to_drop.remove("bltYr-n")
+        if "sqft-n" in cols_to_drop:
+            cols_to_drop.remove("sqft-n")                
+        if "bltYr-n" in cols_to_drop:
+            cols_to_drop.remove("sp-n")
         Xdf = Xdf.drop(cols_to_drop, axis=1)
         
-        # replace na with mean if numeric or mode in object
-        # encode remaining categorical/text
-        # try different normaliztion techniques
-
         nested_cols = Xdf.applymap(type).isin([dict, list]).any()
         Xdf = Xdf.loc[:, ~nested_cols]
         
+        existing = list(Xdf.columns)
+        
+        dates_special = ["offD","offD-month-n","offD-season-n","offD-year-n","onD","onD-month-n","onD-season-n","onD-week-n","onD-year-n","bltYr-n","rmBltYr", "taxyr-n",\
+                         "taxyr"]
+            
+        dates_special = list(set(existing).intersection(set(dates_special)))
+        num_cols = [col for col in Xdf.columns if (Xdf.dtypes[col] in ["int64","int32","float64","float32"] and col not in dates_special)]  
+        ob = [col for col in Xdf.columns if col not in num_cols and col not in dates_special and Xdf.dtypes[col] != "datetime64[ns]"]  
+        #common_dates = [col for col in Xdf.columns if col not in num_cols and col not in ob and col not in dates_special]
+        dates_special = dates_special + [col for col in Xdf.columns if col not in num_cols and col not in ob and col not in dates_special]
+        
+        
+        encoders = []
+        others = []
+
+        for col in Xdf[ob].columns: # {N,U,M}
+            lst = list(set(Xdf[ob][col]))
+            t = len(lst)
+            
+            if np.nan in lst or None in lst:
+                t -= 1
+            if 2 <= t <= 17 and col not in [ # not the index
+            'saletp-b', 'ptype2-l',
+            'prov', 'area', 'city',
+            '_id',
+        ]:
+                encoders.append(col)
+            else:
+                others.append(col)
+        
+
+
+        numeric = Pipeline([ 
+        ('imputer', custom_numeric_imputer()),
+        ("outliers_removal", OutlierRemover())]) # based on the correlation
+        
+        dates_pipe_spec = Pipeline([('rest', Dates_common_Pipeline())]) # interpolate na
+        #dates_pipe_common = Pipeline([('rest', Dates_common_Pipeline())])
+        
+        str_pipe_encoders = Pipeline([("one_hot_imputer", OneHotEncoderWithNames())])
+        str_pipe_others = Pipeline([('imputer', SimpleImputer(strategy="most_frequent"))]) # try other techniques
+        
+        full_pipeline = ColumnTransformer([("num", numeric, num_cols), ("dates_special",dates_pipe_spec,dates_special), ("str_encode",str_pipe_encoders,encoders),("str_others",str_pipe_others,others)])
+
+        g = full_pipeline.fit_transform(Xdf)
+        columns = num_cols + dates_special+ list(one_hot_names) + others
+        
+        z = pd.DataFrame(g,columns=columns)
+        
+        dates_to_change = []
+        
+        for c in dates_special:
+            if Xdf[dates_special].dtypes[c] != "datetime64[ns]":
+                dates_to_change.append(c)
+                
+        all_cols = num_cols+dates_to_change+list(one_hot_names)
+        z[all_cols] = z[all_cols].apply(pd.to_numeric)
+        z = z.reindex(sorted(z.columns), axis=1)
+        Xdf = z
+        Xdf.head(n=100).to_excel("preporcesed_data.xlsx")
+        self.encoded_hot = num_cols+list(one_hot_names)
+        self.Xdf = Xdf
         return Xdf
+    
+    
+    
+    
+    
+    

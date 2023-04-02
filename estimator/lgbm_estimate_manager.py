@@ -107,7 +107,7 @@ class LgbmEstimateManager(RmBaseEstimateManager):
                 '------------------------------------------------')
             return (None, None, None, None, None, None)
         
-        """
+        
         pca = PCA(n_components=0.95) # preserve 95% of explained variance
         tt = df.iloc[:, 0:df.shape[1]-1]
         pd.DataFrame(tt.shape[0] - tt.count()).to_excel("null.xlsx")
@@ -118,8 +118,16 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         self.fit_output_min_max(df.iloc[:, df.shape[1]-1])
         accuracy = self.test_accuracy(model, X_test, y_test)
         #timer.stop(X_train.shape[0])
+        if y_col == "sp-n":
+            scores = cross_val_score(model, X_train, y_train, cv=10).mean()
+            score_data = pd.DataFrame({f'Mean Validation Accuracy for {y_col}': [scores]})
+            table = pd.read_excel('Cross_Val_Eval_1.xlsx') 
+            table = pd.concat([table,score_data], axis = 0)
+            with pd.ExcelWriter('Cross_Val_Eval_1.xlsx') as writer:
+                table.to_excel(writer, index=False)
+        
+        
         """
-
         df_train, df_test = train_test_split(
             df, test_size=0.15, random_state=10)
         
@@ -138,6 +146,7 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         self.fit_output_min_max(df[y_col])
         accuracy = self.test_accuracy(
             model, df_test[x_cols], df_test[y_col])
+        """
         
 
         accuracy_table = pd.read_excel('accuracy_no_changes.xlsx') #accuracy_no_changes #accuracy_with_changes
@@ -148,7 +157,7 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         with pd.ExcelWriter('accuracy_no_changes.xlsx') as writer:
             accuracy_table.to_excel(writer, index=False)
 
-        timer.stop(df_train.shape[0]) #timer.stop(df_train.shape[0])
+        timer.stop(X_train.shape[0]) #timer.stop(df_train.shape[0])
         
         self.logger.info('================================================')
         self.logger.info(

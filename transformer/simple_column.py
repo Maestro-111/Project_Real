@@ -125,13 +125,6 @@ class SimpleColumnTransformer(TransformerMixin, BaseEstimator):
                     raise ex
         df_results = pd.concat(df_results)
         print('after merge========================\n')
-        print()
-        print()
-        print()
-        print()
-        print()
-        print(df_results)
-        print("?")
         timer.stop(len(X.index))
         return df_results
 
@@ -142,6 +135,7 @@ def _transform(simpleTransformer, X):
         # logger.debug(f'transform {name}:{col}=>{targetCol}')
         X = _transform_single(func, col, targetCol, X)
         timer.stop(len(X.index))
+    #X.to_excel("sh.xlsx")
     return X
 
 

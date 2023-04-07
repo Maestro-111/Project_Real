@@ -51,7 +51,7 @@ class RmBaseEstimateManager:
         max_output_value: float = 1000000000,
     ) -> None:
         self.data_source = data_source
-        self.additional_x_cols = data_source.encoded_hot # additional labels for the initial class
+        #self.flag_to_include_else = data_source.flag_to_include_else # additional columns f
         self.name = name
         self.model_class = model_class
         self.logger = BaseCfg.getLogger(name or self.__class__.__name__)
@@ -341,7 +341,7 @@ class RmBaseEstimateManager:
             numeric_columns_only=numeric_columns_only,
             prefer_estimated=prefer_estimated,
             df_grouped=df_grouped,
-            ad_cols = additional_columns
+            ad_cols = self.data_source.flag_to_include_else
         )
         # self.logger.info(f'Data loaded. {suffix_list or self.suffix_list}')
         return df
@@ -360,6 +360,11 @@ class RmBaseEstimateManager:
     ) -> tuple[list[str], str, pd.Series]:
         """Get numeric columns of x and y from df."""
         df = self.filter_data(df)
+        #print("!")
+        #print(df.info())
+        #print("!")
+        ##exit()
+        #print()
         y_column = y_column or self.y_column
         y_numeric_column = None
         x_numeric_columns = []

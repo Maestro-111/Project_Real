@@ -166,7 +166,6 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
         # we may need to use a wrapper here
         # X = pd.DataFrame(X)
         # logger.debug(f'number {self.col} transform')
-        
         if isinstance(self.na_value, str): # probably add normalization?
             if self.na_value == DROP:
                 na_value = np.nan
@@ -178,6 +177,5 @@ class DbNumericTransformer(TransformerMixin, BaseEstimator):
             na_value = self.stats_["mean"]
             
         X.fillna(na_value, inplace=True)
-        
         return X
 

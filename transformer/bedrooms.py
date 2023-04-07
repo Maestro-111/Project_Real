@@ -9,6 +9,7 @@ from transformer.const_label_map import getLevel
 
 logger = BaseCfg.getLogger(__name__)
 
+#pipe?
 
 class RmsTransformer(BaseEstimator, TransformerMixin):
     """rms transformer.
@@ -109,4 +110,5 @@ class RmsTransformer(BaseEstimator, TransformerMixin):
         if nanCount > 0:
             logger.warning(f'{nanCount}/{totalCount} nan values in rms')
         timer.stop(totalCount)
+        #X.head(n=10).to_excel("preporcesed_data.xlsx")
         return X

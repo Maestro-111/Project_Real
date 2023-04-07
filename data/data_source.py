@@ -379,7 +379,7 @@ class DataSource:
         if self.df_raw is None:
             self.load_raw_data()
         self.df_transformed = preprocessor.fit_transform(self.df_raw)
-        self.encoded_hot = preprocessor.encoded_hot
+        self.flag_to_include_else = preprocessor.flag_to_include_else
         # groupby and reindex by EstimateScale
         self.df_grouped = self.df_transformed.set_index([
             'saletp-b', 'ptype2-l',
@@ -409,7 +409,7 @@ class DataSource:
         numeric_columns_only: bool = False,
         prefer_estimated: bool = False,
         df_grouped: pd.DataFrame = None,
-        ad_cols: list[str] = None
+        ad_cols: bool = False
     ):
         """Get dataframe from stored data.
         """
@@ -447,8 +447,15 @@ class DataSource:
         slices.append(slice(None))
         if df_grouped is None: # yes, its None and we use df.grouped (final data frame)
             df_grouped = self.df_grouped
-            
+        
+        #df_grouped.to_excel("what's_popin000.xlsx")
+        
+        #rd = df_grouped
+        #print("!!!!!!!!")
+        #print(tuple(slices))
+        #print(df_grouped.shape)
         rd = df_grouped.loc[tuple(slices), :]
+        #print(rd.shape)
                 
         logger.debug(f'{slices} {len(df_grouped.index)}=>{len(rd.index)}')
         
@@ -460,7 +467,7 @@ class DataSource:
         #rd.to_excel("what's_popin00.xlsx")
         
         
-        if date_span > 0: # problem is here
+        if date_span > 0: 
             rd = rd.loc[rd.onD.between(
                 dateToInt(scale.datePoint - timedelta(days=date_span)),
                 dateToInt(scale.datePoint)
@@ -490,7 +497,7 @@ class DataSource:
         if sample_size is not None and sample_size < rd.shape[0]:
             rd = rd.sample(n=sample_size, random_state=1)
             
-        rd.to_excel("what's_popin1.xlsx")
+        #rd.to_excel("what's_popin1.xlsx")
         
         # select columns from cols
         existing_cols = rd.columns.tolist()
@@ -499,6 +506,7 @@ class DataSource:
             columns = []
             for col in cols:
                 found = False
+                # {zip}, {zip-n} {zip,zip-n}
                 # ['-b', '-n', '-c', '-l', ]:  '-l' is only in 'ptype2-l'
                 for suffix in suffix_list:
                     for c in existing_cols:
@@ -516,14 +524,14 @@ class DataSource:
         else:
             columns = existing_cols
             
+        # ad_cols is refering to the self.encoded_hot in preposcesor.py 
         
-        if ad_cols:        
-            one = set(columns)
-            two = set(cols)
+        if ad_cols: # should boolean value
+            one = set(columns) # derived fearue from default
+            two = set(cols) # the default features
             three = set(existing_cols)
             u = one.union(two)
             dif = list(three.difference(u))
-            
             
             columns = columns + dif # subject to change!
         
@@ -560,7 +568,6 @@ class DataSource:
             exclude_columns = []
         numeric_columns = []
         for col in df.columns:
-            print(col, df[col].dtype)
             try:
                 if (col not in exclude_columns) and \
                     (df[col].dtype == 'float64' or
@@ -569,9 +576,7 @@ class DataSource:
             except Exception as e:
                 self.logger.error(
                     f'Error in getting numeric column:{col} error:{e}')
-        print(numeric_columns)
         if prefer_estimated:
-            exit()
             new_cols = numeric_columns.copy()
             for col in numeric_columns:
                 if col.endswith('-e'):

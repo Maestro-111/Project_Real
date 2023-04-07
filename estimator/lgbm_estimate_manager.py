@@ -69,6 +69,7 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         timer = Timer(str(scale), self.logger)
         timer.start()
         df = self.my_load_data(scale)
+        #df.head().to_excel("sh.xlsx")
         if df is None or df.shape[0] < TRAINING_MIN_ROWS:
             self.logger.info(
                 '================================================')
@@ -129,18 +130,27 @@ class LgbmEstimateManager(RmBaseEstimateManager):
         
         
         df_train, df_test = train_test_split(
-            df, test_size=0.15, random_state=10)
+            df, test_size=0.15) # random_state=10
         
-        # cross
-        if y_col == "sp-n":
-            scores = cross_val_score(model, df_train[x_cols], df_train[y_col], cv=10).mean()
-            score_data = pd.DataFrame({f'Mean Validation Accuracy for {y_col}': [scores]})
-            table = pd.read_excel('Cross_Val_Eval_1.xlsx') 
-            table = pd.concat([table,score_data], axis = 0)
-            with pd.ExcelWriter('Cross_Val_Eval_1.xlsx') as writer:
-                table.to_excel(writer, index=False)
+        # cross only for price
+        
+        #if y_col == "sp-n":
+        scores = cross_val_score(model, df_train[x_cols], df_train[y_col], cv=10).mean()
+        score_data = pd.DataFrame({f'Mean Validation Accuracy for {y_col}': [scores]})
+        table = pd.read_excel('Cross_Val_Eval_1.xlsx') 
+        table = pd.concat([table,score_data], axis = 0)
+        with pd.ExcelWriter('Cross_Val_Eval_1.xlsx') as writer:
+            table.to_excel(writer, index=False)
+        
+        """
+        scores = cross_val_score(model, df_train[x_cols], df_train[y_col], cv=10).mean()
+        score_data = pd.DataFrame({f'Mean Validation Accuracy for {y_col}': [scores]})
+        table = pd.read_excel('Cross_Val_Eval.xlsx') 
+        table = pd.concat([table,score_data], axis = 0)
+        with pd.ExcelWriter('Cross_Val_Eval.xlsx') as writer:
+            table.to_excel(writer, index=False)
 
-            
+         """  
         
         model.fit(df_train[x_cols], df_train[y_col])
         self.fit_output_min_max(df[y_col])

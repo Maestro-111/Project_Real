@@ -451,6 +451,7 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
                 _transformContinuous(row, col, stats)
             transformedCount += 1
             return row
+        
         X = X.apply(_transform, axis=1)
         timer.stop(totalCount)
         logger.info(f'transformed {transformedCount}/{totalCount}')

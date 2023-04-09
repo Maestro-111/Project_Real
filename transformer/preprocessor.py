@@ -35,7 +35,7 @@ from transformer.const_label_map import getLevel, levelType, acType, \
     parkingDesignationType, parkingFacilityType, balconyType, \
     ptpType
     
-    
+
 from transformer.simple_column import SimpleColumnTransformer
 from transformer.street_n_st_num import StNumStTransformer
 
@@ -53,11 +53,13 @@ from sklearn.svm import OneClassSVM
 import random
 from scipy.stats import norm, lognorm, weibull_min, expon, gamma, uniform, kstest
 
-from prep import deal_with_sqft
-from prep import Outliers_removal_ml_dif_rand
-from prep import OutlierRemover_general_iqr
-from prep import null_imputer_ml
-
+from transformer.prep import deal_with_sqft
+from transformer.prep import Outliers_removal_ml_dif_rand
+from transformer.prep import OutlierRemover_general_iqr
+from transformer.prep import null_imputer_ml
+from transformer.prep import Custom_Cat_Imputer
+from transformer.prep import OneHotEncoderWithNames
+from transformer.prep import one_hot_names
 
 
 logger = BaseCfg.getLogger(__name__)
@@ -564,23 +566,40 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         return self.customTransformers
 
     def fit(self, Xdf: pd.DataFrame, y=None): # Xdf is raw data from the database
-
+      
         Xdf["sqft"] = Xdf["sqft"].apply(lambda x : deal_with_sqft(x))
         inds_rsqft = list(Xdf["rmSqft"][Xdf["rmSqft"].isnull()].index)
         inds_sqft = list(Xdf["sqft"][Xdf["sqft"].notnull()].index)
         to_replace = list(set(inds_sqft).intersection(set(inds_rsqft)))
         Xdf["rmSqft"][to_replace] = Xdf["sqft"][to_replace]
         
-        numeric = ["lat","lng","lpr","mfee","sqft","rmSqft","depth","flt","lp","sp","tax"]
-        nums = Xdf[numeric]
+        
+        """
+        
+        numeric = ["lat","lng","lpr","mfee","sqft","rmSqft","depth","flt","lp","sp","tax","taxyr","rmBltYr","bltYr"]
+        cat_num = ["tbdrms", "tgr","bthrms","gr","kch","bdrms","br_plus"]
+        cat_cat =["all_inc", "cac_inc", "daddr","fce","gatp","heat","heat_inc","hydro_inc","lst","prkg_inc","ptp","water_inc","laundry","pvt_ent","laundry_lev","insur_bldg"]
+        #others = [col for col in Xdf.columns if col not in numeric+cat_num+cat_cat]
+        
+        encoder = OneHotEncoderWithNames()
+        one_hot_cat_cat = encoder.fit_transform(Xdf[cat_cat])
+        i = Custom_Cat_Imputer()
+        no_null_cat_num = i.fit_transform(Xdf[cat_num])
+        united = pd.concat([one_hot_cat_cat,no_null_cat_num,Xdf[numeric]], axis = 1)
+
+        c = ["lat","lng"] + cat_num + list(one_hot_names) 
         
         numeric_pipe = Pipeline([ 
-        ('imputer', null_imputer_ml()), 
-        ("outliers_removal", OutlierRemover_general_iqr(cols=["lat","lng"]))]) 
+                ('imputer', null_imputer_ml(dec = True)), 
+                ("outliers_removal", Outliers_removal_ml_dif_rand(cols=c))])  
+
         
-        nums = numeric_pipe.fit_transform(nums)
-        Xdf[numeric] = nums[numeric]
-        
+        united = numeric_pipe.fit_transform(united)
+        Xdf[numeric] = united[numeric]
+        Xdf[cat_num] = no_null_cat_num
+        Xdf[cat_cat] = i.fit_transform(Xdf[cat_cat])
+        """
+     
         """A reference implementation of a fitting function for a transformer.
         Parameters
         ----------
@@ -643,22 +662,22 @@ class Preprocessor(TransformerMixin, BaseEstimator):
         ###### Prepocessing part (some of it)
         print("Started")
         
-        threshold = 0.7
+        #threshold = 0.7
         
-        na_percentages = Xdf.isna().sum() / Xdf.shape[0]
-        cols_to_drop = list(na_percentages[na_percentages > threshold].index)
+        #na_percentages = Xdf.isna().sum() / Xdf.shape[0]
+        #cols_to_drop = list(na_percentages[na_percentages > threshold].index)
         
         
         # be sure that the targets are not dropped
         
-        if "bltYr-n" in cols_to_drop:
-            cols_to_drop.remove("bltYr-n")
-        if "sqft-n" in cols_to_drop:
-            cols_to_drop.remove("sqft-n")                
-        if "bltYr-n" in cols_to_drop:
-            cols_to_drop.remove("sp-n")
+        #if "bltYr-n" in cols_to_drop:
+            #cols_to_drop.remove("bltYr-n")
+        #if "sqft-n" in cols_to_drop:
+            #cols_to_drop.remove("sqft-n")                
+        #if "bltYr-n" in cols_to_drop:
+            #cols_to_drop.remove("sp-n")
             
-        Xdf = Xdf.drop(cols_to_drop, axis=1)
+        #Xdf = Xdf.drop(cols_to_drop, axis=1)
         
         nested_cols = Xdf.applymap(type).isin([dict, list]).any() # dropping the nested things
         Xdf = Xdf.loc[:, ~nested_cols]

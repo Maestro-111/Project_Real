@@ -12,6 +12,19 @@ from base.util import dateFromNum, printColumns
 from sklearn.base import BaseEstimator, TransformerMixin
 from transformer.const_label_map import getLevel
 
+from transformer.prep import deal_with_sqft
+from transformer.prep import Outliers_removal_ml_dif_rand 
+from transformer.prep import OutlierRemover_general_iqr
+from transformer.prep import null_imputer_ml
+from transformer.prep import Custom_Cat_Imputer
+from transformer.prep import OneHotEncoderWithNames
+from transformer.prep import one_hot_names
+from transformer.prep import OutlierRemover_distrs
+from transformer.prep import Outlier_Remover_with_Z
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+
+
 logger = BaseCfg.getLogger(__name__)
 FEATURES_KEY = 'features'
 VALUES_KEY = 'values'
@@ -338,9 +351,77 @@ class BaselineTransformer(BaseEstimator, TransformerMixin):
         -------
         X_transformed : dataframe. The transformed data.
         """
+
         # logger.debug(f'transform rms')
         timer = Timer('baseline', logger)
         timer.start()
+        
+        ######################
+        feats_suf = []
+        sufs = ['-b', '-n', '-c', '-l']  #bths-n, bths  
+
+        for col1 in X.columns:
+            if col1 in  ["ptype2-l"]:
+                continue
+            for s in sufs:
+                if col1.endswith(s):    
+                    feats_suf.append(col1)
+        feats_suf  = list(set(feats_suf)) 
+        
+        
+        g = X[feats_suf]
+        years = [col for col in g.columns if (col.startswith("onD") or col.startswith("offD"))]
+        
+        threshold = 1
+        na_percentages = g.isna().sum() / g.shape[0]
+        cols_to_drop = list(na_percentages[na_percentages >= threshold].index)
+
+        if "bltYr-n" in cols_to_drop:
+            cols_to_drop.remove("bltYr-n")
+        if "sqft-n" in cols_to_drop:
+            cols_to_drop.remove("sqft-n")                
+        if "bltYr-n" in cols_to_drop:
+            cols_to_drop.remove("sp-n")
+        
+            
+        g= g.drop(cols_to_drop, axis=1)    
+        
+        feats_suf = list(g.columns)
+        
+        
+        encodes = []
+        num = []
+        for col in g.columns:
+            if np.nanmax(g[col]) <= 50 and np.sum(g[col]) % 1 == 0:
+                encodes.append(col)
+            else:
+                num.append(col)
+                
+        nums = Pipeline([ 
+            ('imputer_num', null_imputer_ml(dec=True))]) 
+                
+        cats = Pipeline([ 
+            ('imputer_cat', Custom_Cat_Imputer())]) 
+        
+
+        g[encodes] = cats.fit_transform(g[encodes])
+        g = nums.fit_transform(g)
+        
+
+                
+        #OutlierRemover_general_iqr
+        #Outlier_Remover_with_Z
+        #Outliers_removal_ml_dif_rand
+        # OutlierRemover_distrs
+        
+        outs = OutlierRemover_distrs(cols=["lng-n","lat-n"]+years+["taxyr-n","rmBltYr","bltYr-n"])
+        
+        g[num] = outs.fit_transform(g[num])
+        
+        X[feats_suf] = g[feats_suf]
+        
+        ######################
+        
         totalCount = 0
         transformedCount = 0
         new_cols = self.get_feature_names_out()
